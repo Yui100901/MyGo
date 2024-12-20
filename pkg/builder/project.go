@@ -2,9 +2,10 @@ package builder
 
 import (
 	"fmt"
-	"github.com/Yui100901/MyGo/docker"
-	"github.com/Yui100901/MyGo/git"
-	"github.com/Yui100901/MyGo/log_utils"
+	"github.com/Yui100901/MyGo/pkg/docker"
+	"github.com/Yui100901/MyGo/pkg/git"
+	"github.com/Yui100901/MyGo/pkg/log_utils"
+
 	"os"
 	"path/filepath"
 )
