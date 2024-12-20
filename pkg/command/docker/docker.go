@@ -1,9 +1,9 @@
 package docker
 
 import (
-	"command"
 	"fmt"
-	"log_utils"
+	"github.com/Yui100901/MyGo/command"
+	"github.com/Yui100901/MyGo/log_utils"
 	"strings"
 )
 
