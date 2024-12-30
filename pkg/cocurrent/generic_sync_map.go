@@ -14,6 +14,20 @@ type GenericSyncMap[K comparable, V any] struct {
 	data sync.Map
 }
 
+func NewGenericSyncMap[K comparable, V any]() *GenericSyncMap[K, V] {
+	return &GenericSyncMap[K, V]{
+		data: sync.Map{},
+	}
+}
+
+func NewGenericSyncMapFromMap[K comparable, V any](m map[K]V) *GenericSyncMap[K, V] {
+	gm := NewGenericSyncMap[K, V]()
+	for k, v := range m {
+		gm.Set(k, v)
+	}
+	return gm
+}
+
 // Set 方法将键值对添加到 Map 中
 func (gm *GenericSyncMap[K, V]) Set(key K, value V) {
 	gm.data.Store(key, value)

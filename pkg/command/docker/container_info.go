@@ -11,24 +11,24 @@ import (
 // @Date 2024/12/17 16 53
 //
 
-// 定义 Mount 结构体
+// Mount 定义 Mount 结构体
 type Mount struct {
 	Source      string `json:"Source"`
 	Destination string `json:"Destination"`
 	Mode        string `json:"Mode"`
 }
 
-// 定义 PortBinding 结构体
+// PortBinding 定义 PortBinding 结构体
 type PortBinding struct {
 	HostPort string `json:"HostPort"`
 }
 
-// 定义 RestartPolicy 结构体
+// RestartPolicy 定义 RestartPolicy 结构体
 type RestartPolicy struct {
 	Name string `json:"Name"`
 }
 
-// 定义 HostConfig 结构体
+// HostConfig 定义 HostConfig 结构体
 type HostConfig struct {
 	PortBindings    map[string][]PortBinding `json:"PortBindings"`
 	RestartPolicy   RestartPolicy            `json:"RestartPolicy"`
@@ -37,7 +37,7 @@ type HostConfig struct {
 	PublishAllPorts bool                     `json:"PublishAllPorts"`
 }
 
-// 定义 Config 结构体
+// Config 定义 Config 结构体
 type Config struct {
 	User  *string  `json:"User"`
 	Env   []string `json:"Env"`
@@ -45,7 +45,7 @@ type Config struct {
 	Image string   `json:"Image"`
 }
 
-// 定义 ContainerInfo 结构体
+// ContainerInfo 定义 ContainerInfo 结构体
 type ContainerInfo struct {
 	Name       string     `json:"Name"`
 	Config     Config     `json:"Config"`
@@ -53,7 +53,7 @@ type ContainerInfo struct {
 	Mounts     []Mount    `json:"Mounts"`
 }
 
-// ContainerInfo 的方法实现
+// ParseContainerName ContainerInfo 的方法实现
 func (ci *ContainerInfo) ParseContainerName() string {
 	return strings.TrimPrefix(ci.Name, "/")
 }
@@ -119,7 +119,7 @@ func (ci *ContainerInfo) ParseImage() string {
 	return ci.Config.Image
 }
 
-// 定义 DockerCommand 结构体
+// DockerCommand 定义 DockerCommand 结构体
 type DockerCommand struct {
 	ContainerName   string
 	Privileged      bool
@@ -133,7 +133,7 @@ type DockerCommand struct {
 	Image           string
 }
 
-// 从 ContainerInfo 创建 DockerCommand 实例
+// NewDockerCommand 从 ContainerInfo 创建 DockerCommand 实例
 func NewDockerCommand(info *ContainerInfo) *DockerCommand {
 	return &DockerCommand{
 		ContainerName:   info.ParseContainerName(),
@@ -149,7 +149,7 @@ func NewDockerCommand(info *ContainerInfo) *DockerCommand {
 	}
 }
 
-// 将 DockerCommand 转换为命令行参数
+// ToCommand 将 DockerCommand 转换为命令行参数
 func (dc *DockerCommand) ToCommand() []string {
 	var command []string
 	command = append(command, "docker", "run", "-d")

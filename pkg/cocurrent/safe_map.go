@@ -19,6 +19,14 @@ func NewSafeMap[K comparable, V any]() *SafeMap[K, V] {
 	}
 }
 
+func NewSafeMapFromMap[K comparable, V any](m map[K]V) *SafeMap[K, V] {
+	sm := NewSafeMap[K, V]()
+	for k, v := range m {
+		sm.Set(k, v)
+	}
+	return sm
+}
+
 func (s *SafeMap[K, V]) Set(k K, v V) {
 	s.rwm.Lock()
 	defer s.rwm.Unlock()
