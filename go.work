@@ -3,8 +3,8 @@ go 1.22
 use (
 	pkg/log_utils
     pkg/command
-    pkg/command/docker
-    pkg/command/git
+	pkg/command/docker
+	pkg/command/git
     pkg/builder
     pkg/file_utils
     pkg/cocurrent
