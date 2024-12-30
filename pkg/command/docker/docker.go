@@ -13,13 +13,6 @@ import (
 // @Date 2024/12/17 16 47
 //
 
-// 执行自定义docker命令
-func DockerRunCommand(args ...string) error {
-	log_utils.Info.Println("执行自定义docker命令")
-	_, err := command.RunCommand("docker", args...)
-	return err
-}
-
 // 停止docker容器
 func ContainerStop(containers ...string) error {
 	log_utils.Info.Println("停止容器", containers)
