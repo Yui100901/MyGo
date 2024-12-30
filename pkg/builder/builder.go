@@ -1,12 +1,9 @@
 package builder
 
 import (
-	"fmt"
 	"github.com/Yui100901/MyGo/pkg/command"
 	"github.com/Yui100901/MyGo/pkg/command/docker"
-	"log"
-	"os"
-	"path/filepath"
+	"github.com/Yui100901/MyGo/pkg/log_utils"
 )
 
 //
@@ -29,7 +26,7 @@ func NewMaven(path string) *Maven {
 }
 
 func (m *Maven) Build() (string, error) {
-	log.Println("构建Maven项目")
+	log_utils.Info.Println("构建Maven项目")
 	return command.RunCommand("mvn", "clean", "package")
 }
 
@@ -43,7 +40,7 @@ func NewGradle(path string) *Gradle {
 }
 
 func (g *Gradle) Build() (string, error) {
-	log.Println("构建Gradle项目")
+	log_utils.Info.Println("构建Gradle项目")
 	return command.RunCommand("gradle", "build")
 }
 
@@ -57,7 +54,7 @@ func NewPython(path string) *Python {
 }
 
 func (p *Python) Build() (string, error) {
-	log.Println("构建Python项目")
+	log_utils.Info.Println("构建Python项目")
 	return command.RunCommand("pip", "install", "-r", "requirements.txt", "-i", "https://pypi.tuna.tsinghua.edu.cn/simple")
 }
 
@@ -71,30 +68,11 @@ func NewNode(path string) *Node {
 }
 
 func (n *Node) Build() (string, error) {
-	log.Println("构建Node项目")
+	log_utils.Info.Println("构建Node项目")
 	if _, err := command.RunCommand("npm", "install", "--registry=https://registry.npmmirror.com"); err != nil {
 		return "", err
 	}
-	if _, err := command.RunCommand("npm", "run", "build"); err != nil {
-		return "", err
-	}
-	workDir, err := os.Getwd()
-	if err != nil {
-		return "", err
-	}
-	source := "/root/node_file/Cesium.js"
-	target := filepath.Join(workDir, "dist", "cesium", "Cesium.js")
-	if _, err := os.Stat(source); os.IsNotExist(err) {
-		log.Printf("源文件不存在：%s\n", source)
-	} else if _, err := os.Stat(filepath.Dir(target)); os.IsNotExist(err) {
-		log.Printf("目标目录不存在：%s\n", filepath.Dir(target))
-	} else {
-		if err := os.Rename(source, target); err != nil {
-			return "", fmt.Errorf("替换文件失败: %v", err)
-		}
-		log.Println("文件替换成功！")
-	}
-	return "", nil
+	return command.RunCommand("npm", "run", "build")
 }
 
 // Go 构建器结构体
@@ -107,7 +85,7 @@ func NewGo(path string) *Go {
 }
 
 func (g *Go) Build() (string, error) {
-	log.Println("构建Go项目")
+	log_utils.Info.Println("构建Go项目")
 	if _, err := command.RunCommand("go", "env", "-w", "GO111MODULE=on"); err != nil {
 		return "", err
 	}
@@ -127,7 +105,7 @@ func NewC(path string) *C {
 }
 
 func (c *C) Build() (string, error) {
-	log.Println("构建C项目")
+	log_utils.Info.Println("构建C项目")
 	if _, err := command.RunCommand("cmake", ".."); err != nil {
 		return "", err
 	}
@@ -144,7 +122,7 @@ func NewRust(path string) *Rust {
 }
 
 func (r *Rust) Build() (string, error) {
-	log.Println("构建Rust项目")
+	log_utils.Info.Println("构建Rust项目")
 	return command.RunCommand("cargo", "build", "--release")
 }
 
@@ -159,6 +137,6 @@ func NewDocker(path, name string) *Docker {
 }
 
 func (d *Docker) Build() (string, error) {
-	log.Println("构建Docker项目")
+	log_utils.Info.Println("构建Docker项目")
 	return "", docker.BuildImage(d.Name)
 }
