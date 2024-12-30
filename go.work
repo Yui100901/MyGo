@@ -8,7 +8,6 @@ use (
     pkg/builder
     pkg/file_utils
     pkg/cocurrent
-	pkg/network
 	pkg/network/http_utils
 	pkg/network/mqtt_utils
 )
