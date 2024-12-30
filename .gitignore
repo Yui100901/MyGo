@@ -6,3 +6,5 @@
 *.iml
 out
 gen
+go.work.sum
+go.sum
