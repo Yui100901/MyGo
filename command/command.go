@@ -3,7 +3,7 @@ package command
 import (
 	"bufio"
 	"fmt"
-	"github.com/Yui100901/MyGo/pkg/log_utils"
+	"github.com/Yui100901/MyGo/log_utils"
 	"os/exec"
 	"runtime"
 	"strings"

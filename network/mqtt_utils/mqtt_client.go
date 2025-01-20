@@ -2,7 +2,7 @@ package mqtt_utils
 
 import (
 	"fmt"
-	"github.com/Yui100901/MyGo/pkg/log_utils"
+	"github.com/Yui100901/MyGo/log_utils"
 	mqtt "github.com/eclipse/paho.mqtt.golang"
 	"maps"
 )

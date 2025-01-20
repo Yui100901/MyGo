@@ -1,6 +1,8 @@
 package git
 
-import "github.com/Yui100901/MyGo/pkg/command"
+import (
+	"github.com/Yui100901/MyGo/command"
+)
 
 //
 // @Author yfy2001

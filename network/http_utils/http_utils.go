@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"github.com/Yui100901/MyGo/pkg/log_utils"
+	"github.com/Yui100901/MyGo/log_utils"
 	"io"
 	"net/http"
 	"net/url"
