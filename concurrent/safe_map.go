@@ -96,7 +96,7 @@ func (m *SafeMap[K, V]) Delete(key K) {
 	delete(m.maps[shard], key)
 }
 
-// Clear 清空地图
+// Clear 清空map
 func (m *SafeMap[K, V]) Clear() {
 	for shard := range m.maps {
 		m.locks[shard].Lock()
@@ -105,7 +105,7 @@ func (m *SafeMap[K, V]) Clear() {
 	}
 }
 
-// Length 返回地图中的元素数量
+// Length 返回map中的元素数量
 func (m *SafeMap[K, V]) Length() int {
 	length := 0
 	for shard := range m.maps {
@@ -116,7 +116,7 @@ func (m *SafeMap[K, V]) Length() int {
 	return length
 }
 
-// Keys 返回地图中的所有键
+// Keys 返回map中的所有键
 func (m *SafeMap[K, V]) Keys() []K {
 	keys := make([]K, 0)
 	for shard := range m.maps {
@@ -129,7 +129,7 @@ func (m *SafeMap[K, V]) Keys() []K {
 	return keys
 }
 
-// Values 返回地图中的所有值
+// Values 返回map中的所有值
 func (m *SafeMap[K, V]) Values() []V {
 	values := make([]V, 0)
 	for shard := range m.maps {
@@ -142,7 +142,7 @@ func (m *SafeMap[K, V]) Values() []V {
 	return values
 }
 
-// ForEach 遍历地图中的所有键值对
+// ForEach 遍历map中的所有键值对
 func (m *SafeMap[K, V]) ForEach(fn func(K, V) bool) {
 	for shard := range m.maps {
 		m.locks[shard].RLock()
