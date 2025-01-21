@@ -1,4 +1,4 @@
-package cocurrent
+package concurrent
 
 import (
 	"testing"
@@ -44,7 +44,7 @@ func TestGenericSyncMap_GetOr(t *testing.T) {
 }
 
 func TestSafeMap_GetOr(t *testing.T) {
-	m := NewSafeMap[string, string]()
+	m := NewSafeMap[string, string](32)
 	m.Set("foo", "bar")
 	m.Set("foo1", "bar1")
 	v, _ := m.Get("foo")
