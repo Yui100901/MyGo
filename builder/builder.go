@@ -16,13 +16,13 @@ type BuildConfig struct {
 }
 
 type NodeConfig struct {
-	NodePackage string
+	NodePackage string //node打包工具
 	BuildTag    string
 }
 
 // Builder 接口
 type Builder interface {
-	Build(config BuildConfig) (string, error)
+	Build(config BuildConfig) error
 }
 
 // Maven 构建器结构体
@@ -34,7 +34,7 @@ func NewMaven(path string) *Maven {
 	return &Maven{Path: path}
 }
 
-func (m *Maven) Build(config BuildConfig) (string, error) {
+func (m *Maven) Build(config BuildConfig) error {
 	log_utils.Info.Println("构建Maven项目")
 	return command.RunCommand("mvn", "clean", "package")
 }
@@ -48,7 +48,7 @@ func NewGradle(path string) *Gradle {
 	return &Gradle{Path: path}
 }
 
-func (g *Gradle) Build(config BuildConfig) (string, error) {
+func (g *Gradle) Build(config BuildConfig) error {
 	log_utils.Info.Println("构建Gradle项目")
 	return command.RunCommand("gradle", "build")
 }
@@ -62,7 +62,7 @@ func NewPython(path string) *Python {
 	return &Python{Path: path}
 }
 
-func (p *Python) Build(config BuildConfig) (string, error) {
+func (p *Python) Build(config BuildConfig) error {
 	log_utils.Info.Println("构建Python项目")
 	return command.RunCommand("pip", "install", "-r", "requirements.txt", "-i", "https://pypi.tuna.tsinghua.edu.cn/simple")
 }
@@ -76,7 +76,7 @@ func NewNode(path string) *Node {
 	return &Node{Path: path}
 }
 
-func (n *Node) Build(config BuildConfig) (string, error) {
+func (n *Node) Build(config BuildConfig) error {
 	log_utils.Info.Println("构建Node项目")
 	switch config.NodeConfig.NodePackage {
 	default:
@@ -86,19 +86,19 @@ func (n *Node) Build(config BuildConfig) (string, error) {
 	}
 }
 
-func NpmCommand(config NodeConfig) (string, error) {
-	if _, err := command.RunCommand("npm", "install", "--registry=https://registry.npmmirror.com"); err != nil {
-		return "", err
+func NpmCommand(config NodeConfig) error {
+	if err := command.RunCommand("npm", "install", "--registry=https://registry.npmmirror.com"); err != nil {
+		return err
 	}
 	return command.RunCommand("npm", "run", "build")
 }
 
-func PnpmCommand(config NodeConfig) (string, error) {
-	if _, err := command.RunCommand("npm", "install", "-g", "pnpm", "--registry=https://registry.npmmirror.com"); err != nil {
-		return "", err
+func PnpmCommand(config NodeConfig) error {
+	if err := command.RunCommand("npm", "install", "-g", "pnpm", "--registry=https://registry.npmmirror.com"); err != nil {
+		return err
 	}
-	if _, err := command.RunCommand("pnpm", "install"); err != nil {
-		return "", err
+	if err := command.RunCommand("pnpm", "install"); err != nil {
+		return err
 	}
 	buildCommand := "build"
 	if config.BuildTag != "" {
@@ -116,13 +116,13 @@ func NewGo(path string) *Go {
 	return &Go{Path: path}
 }
 
-func (g *Go) Build(config BuildConfig) (string, error) {
+func (g *Go) Build(config BuildConfig) error {
 	log_utils.Info.Println("构建Go项目")
-	if _, err := command.RunCommand("go", "env", "-w", "GO111MODULE=on"); err != nil {
-		return "", err
+	if err := command.RunCommand("go", "env", "-w", "GO111MODULE=on"); err != nil {
+		return err
 	}
-	if _, err := command.RunCommand("go", "env", "-w", "GOPROXY=https://goproxy.cn,direct"); err != nil {
-		return "", err
+	if err := command.RunCommand("go", "env", "-w", "GOPROXY=https://goproxy.cn,direct"); err != nil {
+		return err
 	}
 	return command.RunCommand("go", "build")
 }
@@ -136,10 +136,10 @@ func NewC(path string) *C {
 	return &C{Path: path}
 }
 
-func (c *C) Build(config BuildConfig) (string, error) {
+func (c *C) Build(config BuildConfig) error {
 	log_utils.Info.Println("构建C项目")
-	if _, err := command.RunCommand("cmake", ".."); err != nil {
-		return "", err
+	if err := command.RunCommand("cmake", ".."); err != nil {
+		return err
 	}
 	return command.RunCommand("make")
 }
@@ -153,7 +153,7 @@ func NewRust(path string) *Rust {
 	return &Rust{Path: path}
 }
 
-func (r *Rust) Build(config BuildConfig) (string, error) {
+func (r *Rust) Build(config BuildConfig) error {
 	log_utils.Info.Println("构建Rust项目")
 	return command.RunCommand("cargo", "build", "--release")
 }
@@ -168,7 +168,7 @@ func NewDocker(path, name string) *Docker {
 	return &Docker{Path: path, Name: name}
 }
 
-func (d *Docker) Build(config BuildConfig) (string, error) {
+func (d *Docker) Build(config BuildConfig) error {
 	log_utils.Info.Println("构建Docker项目")
-	return "", docker.BuildImage(d.Name)
+	return docker.BuildImage(d.Name)
 }

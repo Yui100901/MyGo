@@ -128,7 +128,7 @@ func (p *Project) Build(config BuildConfig) {
 		return
 	}
 	for _, builderItem := range p.BuilderList {
-		if _, err := builderItem.Builder.Build(config); err != nil {
+		if err := builderItem.Builder.Build(config); err != nil {
 			log_utils.Warn.Println("构建产生警告或错误！")
 		}
 	}

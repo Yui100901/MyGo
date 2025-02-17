@@ -11,27 +11,23 @@ import (
 
 func CloneDefault(url, branch, dir string) error {
 	args := []string{"clone", "--branch", branch, url, dir}
-	_, err := command.RunCommand("git", args...)
-	return err
+	return command.RunCommand("git", args...)
 }
 
 func CloneSingleBranch(url, branch, dir string) error {
 	args := []string{"clone",
 		"--single-branch", "--branch", branch,
 		url, dir}
-	_, err := command.RunCommand("git", args...)
-	return err
+	return command.RunCommand("git", args...)
 }
 
 func CloneLatest(url, branch, dir string) error {
 	args := []string{"clone",
 		"--single-branch", "--branch", branch,
 		"--depth", "1", url, dir}
-	_, err := command.RunCommand("git", args...)
-	return err
+	return command.RunCommand("git", args...)
 }
 
 func Pull() error {
-	_, err := command.RunCommand("git", "pull")
-	return err
+	return command.RunCommand("git", "pull")
 }

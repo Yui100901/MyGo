@@ -98,7 +98,7 @@ func (c *MQTTClient) Unsubscribe(topicList []string) {
 func (c *MQTTClient) Publish(r *MQTTPublishRequest) ([]byte, error) {
 	if !c.client.IsConnected() {
 		if token := c.client.Connect(); token.Wait() && token.Error() != nil {
-			log_utils.Error.Println("连接失败: %v", token.Error())
+			log_utils.Error.Printf("连接失败: %v", token.Error())
 			return nil, token.Error()
 		}
 	}

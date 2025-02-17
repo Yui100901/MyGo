@@ -16,24 +16,21 @@ import (
 func ContainerStop(containers ...string) error {
 	log_utils.Info.Println("停止容器", containers)
 	args := append([]string{"stop"}, containers...)
-	_, err := command.RunCommand("docker", args...)
-	return err
+	return command.RunCommand("docker", args...)
 }
 
 // ContainerKill 强制停止docker容器
 func ContainerKill(containers ...string) error {
 	log_utils.Info.Println("强制停止容器", containers)
 	args := append([]string{"kill"}, containers...)
-	_, err := command.RunCommand("docker", args...)
-	return err
+	return command.RunCommand("docker", args...)
 }
 
 // ContainerRemove 删除docker容器
 func ContainerRemove(containers ...string) error {
 	log_utils.Info.Println("删除容器", containers)
 	args := append([]string{"rm"}, containers...)
-	_, err := command.RunCommand("docker", args...)
-	return err
+	return command.RunCommand("docker", args...)
 }
 
 // ContainerInspect 获取容器详细信息
@@ -56,16 +53,14 @@ func ImageListFormatted() (string, error) {
 func ImageRemove(images ...string) error {
 	log_utils.Info.Println("删除镜像", images)
 	args := append([]string{"rmi"}, images...)
-	_, err := command.RunCommand("docker", args...)
-	return err
+	return command.RunCommand("docker", args...)
 }
 
 // BuildImage 构建Docker镜像
 func BuildImage(name string) error {
 	log_utils.Info.Println("构建镜像", name)
 	args := []string{"build", "-t", name, "."}
-	_, err := command.RunCommand("docker", args...)
-	return err
+	return command.RunCommand("docker", args...)
 }
 
 // Save 导出Docker镜像
@@ -75,24 +70,21 @@ func Save(name, path string) error {
 	sanitizedFilename = strings.ReplaceAll(sanitizedFilename, "/", "_")
 	filename := fmt.Sprintf("%s/%s.tar", path, sanitizedFilename)
 	args := []string{"save", "-o", filename, name}
-	_, err := command.RunCommand("docker", args...)
-	return err
+	return command.RunCommand("docker", args...)
 }
 
 // Load 导入Docker镜像
 func Load(path string) error {
 	log_utils.Info.Println("导入镜像", path)
 	args := []string{"load", "-i", path}
-	_, err := command.RunCommand("docker", args...)
-	return err
+	return command.RunCommand("docker", args...)
 }
 
 // ImagePrune 清理docker镜像
 func ImagePrune() error {
 	log_utils.Info.Println("清理镜像")
 	args := []string{"image", "prune", "-f"}
-	_, err := command.RunCommand("docker", args...)
-	return err
+	return command.RunCommand("docker", args...)
 }
 
 // DefaultRun 默认启动Docker容器
@@ -108,8 +100,7 @@ func DefaultRun(name string, ports ...string) error {
 		args = append(args, "-p", p+":"+p)
 	}
 	args = append(args, name+":latest")
-	_, err := command.RunCommand("docker", args...)
-	return err
+	return command.RunCommand("docker", args...)
 }
 
 // ContainerRerun 重新创建Docker容器

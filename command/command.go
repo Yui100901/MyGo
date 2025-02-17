@@ -29,7 +29,10 @@ func NewCommand(command string, args ...string) *exec.Cmd {
 	return cmd
 }
 
-func RunCommand(command string, args ...string) (string, error) {
+// RunCommand 运行命令
+// 在控制台实时显示输出标准输出和标准错误
+// 遇到无法继续的错误则返回
+func RunCommand(command string, args ...string) error {
 
 	cmd := NewCommand(command, args...)
 
@@ -37,12 +40,12 @@ func RunCommand(command string, args ...string) (string, error) {
 	stdout, err := cmd.StdoutPipe()
 	stderr, err := cmd.StderrPipe()
 	if err != nil {
-		return "Failed", err
+		return err
 	}
 
 	// 启动命令
 	if err := cmd.Start(); err != nil {
-		return "Failed", err
+		return err
 	}
 
 	// 标准输出
@@ -63,12 +66,15 @@ func RunCommand(command string, args ...string) (string, error) {
 
 	// 等待命令执行完成
 	if err := cmd.Wait(); err != nil {
-		return "Failed", err
+		return err
 	}
 
-	return "Success", nil
+	return nil
 }
 
+// RunCommandOutput 运行命令
+// 返回输出结构
+// 运行出错则返回错误
 func RunCommandOutput(command string, args ...string) (string, error) {
 	cmd := NewCommand(command, args...)
 	output, err := cmd.Output()
