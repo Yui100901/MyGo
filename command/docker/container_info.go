@@ -53,7 +53,6 @@ type ContainerInfo struct {
 	Mounts     []Mount    `json:"Mounts"`
 }
 
-// ParseContainerName ContainerInfo 的方法实现
 func (ci *ContainerInfo) ParseContainerName() string {
 	return strings.TrimPrefix(ci.Name, "/")
 }
@@ -112,7 +111,7 @@ func (ci *ContainerInfo) ParsePortBindings() []string {
 }
 
 func (ci *ContainerInfo) ParseRestartPolicy() string {
-	return fmt.Sprintf("--restart=%s", ci.HostConfig.RestartPolicy.Name)
+	return ci.HostConfig.RestartPolicy.Name
 }
 
 func (ci *ContainerInfo) ParseImage() string {
@@ -163,15 +162,21 @@ func (dc *DockerCommand) ToCommand() []string {
 	if dc.AutoRemove {
 		command = append(command, "--rm")
 	}
+	if dc.RestartPolicy != "" {
+		command = append(command, "--restart", dc.RestartPolicy)
+	}
 	if dc.User != "" {
 		command = append(command, "-u", dc.User)
 	}
+	//设置环境变量
 	for _, env := range dc.Envs {
 		command = append(command, "-e", env)
 	}
+	//设置卷挂载
 	for _, mount := range dc.Mounts {
 		command = append(command, "-v", mount)
 	}
+	//设置端口映射
 	for _, portBinding := range dc.PortBindings {
 		command = append(command, "-p", portBinding)
 	}
