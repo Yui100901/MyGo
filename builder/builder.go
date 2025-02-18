@@ -78,33 +78,38 @@ func NewNode(path string) *Node {
 
 func (n *Node) Build(config BuildConfig) error {
 	log_utils.Info.Println("构建Node项目")
+	var nodeCmd string
 	switch config.NodeConfig.NodePackage {
 	default:
-		return NpmCommand(config.NodeConfig)
+		nodeCmd = "npm"
+		err := NpmInstall()
+		if err != nil {
+			return err
+		}
 	case "pnpm":
-		return PnpmCommand(config.NodeConfig)
+		nodeCmd = "pnpm"
+		err := PnpmInstall()
+		if err != nil {
+			return err
+		}
 	}
+	buildCommand := "build"
+	if config.NodeConfig.BuildTag != "" {
+		buildCommand += ":" + config.NodeConfig.BuildTag
+	}
+	return command.RunCommand(nodeCmd, "run", buildCommand)
 }
 
-func NpmCommand(config NodeConfig) error {
-	if err := command.RunCommand("npm", "install", "--registry=https://registry.npmmirror.com"); err != nil {
-		return err
-	}
-	return command.RunCommand("npm", "run", "build")
+func NpmInstall() error {
+	return command.RunCommand("npm", "install", "--registry=https://registry.npmmirror.com")
+
 }
 
-func PnpmCommand(config NodeConfig) error {
+func PnpmInstall() error {
 	if err := command.RunCommand("npm", "install", "-g", "pnpm", "--registry=https://registry.npmmirror.com"); err != nil {
 		return err
 	}
-	if err := command.RunCommand("pnpm", "install"); err != nil {
-		return err
-	}
-	buildCommand := "build"
-	if config.BuildTag != "" {
-		buildCommand += ":" + config.BuildTag
-	}
-	return command.RunCommand("pnpm", "run", buildCommand)
+	return command.RunCommand("pnpm", "install")
 }
 
 // Go 构建器结构体

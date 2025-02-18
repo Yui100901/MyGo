@@ -1,12 +1,10 @@
 package websocket_utils
 
 import (
-	"encoding/json"
 	"github.com/Yui100901/MyGo/log_utils"
 	"github.com/gorilla/websocket"
 	"net/http"
 	"sync"
-	"time"
 )
 
 //
@@ -22,24 +20,33 @@ var WSServer = websocket.Upgrader{
 }
 
 type WebSocket struct {
-	Conn   *websocket.Conn
-	Done   chan struct{}
-	ticker *time.Ticker
-	mu     sync.Mutex
+	Conn *websocket.Conn //底层websocket连接对象
+	Done chan struct{}
+	mu   sync.Mutex
 }
 
-func NewWebSocket(w http.ResponseWriter, r *http.Request) *WebSocket {
-	conn, err := WSServer.Upgrade(w, r, nil)
+func NewWebSocketByUpgrade(w http.ResponseWriter, r *http.Request, responseHeader http.Header) (*WebSocket, error) {
+	conn, err := WSServer.Upgrade(w, r, responseHeader)
 	if err != nil {
-		log_utils.Error.Println(err)
-		return nil
+		return nil, err
 	}
-	interval := 1000
 	return &WebSocket{
-		Conn:   conn,
-		Done:   make(chan struct{}),
-		ticker: time.NewTicker(time.Millisecond * time.Duration(interval)),
+		Conn: conn,
+		Done: make(chan struct{}),
+		mu:   sync.Mutex{},
+	}, nil
+}
+
+func NewWebSocketByDail(url string, requestHeader http.Header) (*WebSocket, error) {
+	conn, _, err := websocket.DefaultDialer.Dial(url, requestHeader)
+	if err != nil {
+		return nil, err
 	}
+	return &WebSocket{
+		Conn: conn,
+		Done: make(chan struct{}),
+		mu:   sync.Mutex{},
+	}, nil
 }
 
 func (ws *WebSocket) OnMessage(handler func([]byte)) {
@@ -57,22 +64,11 @@ func (ws *WebSocket) OnMessage(handler func([]byte)) {
 	}
 }
 
-func (ws *WebSocket) SendMessage(data func() []any) {
-	for {
-		select {
-		case <-ws.Done:
-			return
-		case <-ws.ticker.C:
-			payload, _ := json.Marshal(data())
-			ws.mu.Lock()
-			err := ws.Conn.WriteMessage(websocket.TextMessage, payload)
-			ws.mu.Unlock()
-			if err != nil {
-				log_utils.Error.Println("Websocket Write ERROR:", err)
-				return
-			}
-		}
-	}
+func (ws *WebSocket) SendMessage(data func() []byte) error {
+	ws.mu.Lock()
+	err := ws.Conn.WriteMessage(websocket.TextMessage, data())
+	ws.mu.Unlock()
+	return err
 }
 
 func (ws *WebSocket) Close() {
