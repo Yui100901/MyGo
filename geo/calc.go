@@ -41,21 +41,21 @@ func CalculateUnitDistances(c *Coordinate) *UnitDistances {
 	}
 }
 
-// CalcCoordinateOffset 计算坐标偏移
+// CalculateCoordinateOffset 计算坐标偏移
 // 传入原点
 // 传入一个方位角上的距离偏移
 // 返回坐标偏移量
-func CalcCoordinateOffset(c *Coordinate, of *AzimuthOffset) *CoordinateOffset {
+func CalculateCoordinateOffset(c *Coordinate, of *BearingOffset) *CoordinateOffset {
 
 	//方向角弧度
-	azimuthRadians := of.AzimuthRadians
+	bearingRadians := of.BearingRadians
 
 	unitDistances := CalculateUnitDistances(c)
 
 	//单位距离的经度变化量
-	unitDeltaLongitude := 1 * math.Sin(azimuthRadians) / unitDistances.UnitLongitudeDistance
+	unitDeltaLongitude := 1 * math.Sin(bearingRadians) / unitDistances.UnitLongitudeDistance
 	//单位距离经度变化量
-	unitDeltaLatitude := 1 * math.Cos(azimuthRadians) / unitDistances.UnitLatitudeDistance
+	unitDeltaLatitude := 1 * math.Cos(bearingRadians) / unitDistances.UnitLatitudeDistance
 
 	//经度偏移
 	deltaLongitude := unitDeltaLongitude * of.Distance
@@ -64,6 +64,27 @@ func CalcCoordinateOffset(c *Coordinate, of *AzimuthOffset) *CoordinateOffset {
 
 	return NewCoordinateOffset(deltaLongitude, deltaLatitude)
 
+}
+
+// CalculateBearing Calculate initial CalculateBearing between two points
+// 传入两个点坐标
+// 计算方位角
+func CalculateBearing(p1, p2 *Coordinate) float64 {
+	// 计算两点经度差（单位：弧度）
+	deltaLambda := p2.LongitudeRadians - p1.LongitudeRadians
+
+	// 计算 y 和 x
+	y := math.Sin(deltaLambda) * math.Cos(p2.LatitudeRadians)
+	x := math.Cos(p1.LatitudeRadians)*math.Sin(p2.LatitudeRadians) -
+		math.Sin(p1.LatitudeRadians)*math.Cos(p2.LatitudeRadians)*math.Cos(deltaLambda)
+
+	// 使用 atan2 计算初始方位角（单位：弧度）
+	theta := math.Atan2(y, x)
+
+	// 将弧度转换为度数，并归一化到 0-360 度
+	bearing := math.Mod(theta*180/math.Pi+360, 360)
+
+	return bearing
 }
 
 // DegreeToRadians 角度转弧度

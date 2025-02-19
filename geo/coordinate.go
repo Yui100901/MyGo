@@ -28,17 +28,17 @@ type UnitDistances struct {
 	UnitLatitudeDistance  float64 //单位纬度距离
 }
 
-// AzimuthOffset 方位偏移
-type AzimuthOffset struct {
-	Azimuth        float64 `json:"azimuth"`        //方位角
-	AzimuthRadians float64 `json:"azimuthRadians"` //弧度制方位角
+// BearingOffset 方位偏移
+type BearingOffset struct {
+	Bearing        float64 `json:"bearing"`        //方位角
+	BearingRadians float64 `json:"bearingRadians"` //弧度制方位角
 	Distance       float64 `json:"distance"`       //偏移距离
 }
 
-func NewAzimuthOffset(azimuth, distance float64) *AzimuthOffset {
-	return &AzimuthOffset{
-		Azimuth:        azimuth,
-		AzimuthRadians: DegreeToRadians(azimuth),
+func NewBearingOffset(azimuth, distance float64) *BearingOffset {
+	return &BearingOffset{
+		Bearing:        azimuth,
+		BearingRadians: DegreeToRadians(azimuth),
 		Distance:       distance,
 	}
 }
