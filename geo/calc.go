@@ -9,7 +9,7 @@ import (
 // @Date 2024/8/23 19 08
 //
 
-//部分地理相关计算函数
+//提供部分简单的地理相关计算函数
 
 // EarthRadius 地球平均半径
 const EarthRadius = 6371_393
