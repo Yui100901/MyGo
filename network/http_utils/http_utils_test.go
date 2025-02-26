@@ -1,6 +1,9 @@
 package http_utils
 
-import "testing"
+import (
+	"net/http"
+	"testing"
+)
 
 //
 // @Author yfy2001
@@ -9,6 +12,11 @@ import "testing"
 
 func TestHTTPClient(t *testing.T) {
 	c := NewHTTPClient()
-	data, _ := c.SendRequest(NewHTTPRequest("GetByQuery", "http://www.example.com", nil, nil))
+	data, err := c.SendRequest(NewHTTPRequest(http.MethodGet, "http://www.example.com", map[string]string{
+		"foo": "bar",
+	}, nil, "", nil))
+	if err != nil {
+		t.Log(err)
+	}
 	t.Log(string(data))
 }
