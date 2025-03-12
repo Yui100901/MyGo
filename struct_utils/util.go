@@ -1,7 +1,9 @@
 package struct_utils
 
 import (
+	"encoding/json"
 	"fmt"
+	"gopkg.in/yaml.v2"
 	"reflect"
 )
 
@@ -104,4 +106,33 @@ func MapToStruct(data map[string]any, result any) error {
 	}
 
 	return nil
+}
+
+// DataFormat 是一个自定义类型，用于表示数据格式
+type DataFormat int
+
+const (
+	JSON DataFormat = iota
+	YAML
+)
+
+// NewStructFromData 根据传入的类型和数据格式进行转换
+func NewStructFromData[T any](data []byte, format DataFormat) (*T, error) {
+	var result T
+	var err error
+
+	switch format {
+	case JSON:
+		err = json.Unmarshal(data, &result)
+	case YAML:
+		err = yaml.Unmarshal(data, &result)
+	default:
+		return nil, fmt.Errorf("unsupported data format")
+	}
+
+	if err != nil {
+		return nil, fmt.Errorf("error unmarshalling data: %v", err)
+	}
+
+	return &result, nil
 }
