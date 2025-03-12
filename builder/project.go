@@ -121,7 +121,7 @@ func (p *Project) InitBuilder() {
 }
 
 // Build 构建项目
-func (p *Project) Build(config BuildConfig) {
+func (p *Project) Build(config *BuildConfig) {
 	os.Chdir(p.Path)
 	if len(p.BuilderList) == 0 {
 		log_utils.Error.Println("没有找到任何可构建的文件！")
