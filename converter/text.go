@@ -10,6 +10,14 @@ import (
 // @Date 2025/3/4 13 36
 //
 
+// Capitalize 字符首字母大写
+func Capitalize(s string) string {
+	if len(s) == 0 {
+		return s
+	}
+	return strings.ToUpper(string(s[0])) + s[1:]
+}
+
 // CamelToSnake 驼峰转下划线
 func CamelToSnake(s string) string {
 	runes := []rune(s)
@@ -32,7 +40,7 @@ func SnakeToCamel(s string) string {
 	parts := strings.Split(s, "_")
 	for i := range parts {
 		if i > 0 {
-			parts[i] = strings.Title(parts[i])
+			parts[i] = Capitalize(parts[i])
 		}
 	}
 	return strings.Join(parts, "")
