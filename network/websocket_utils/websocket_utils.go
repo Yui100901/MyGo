@@ -54,7 +54,7 @@ func NewWebSocketByDial(url string, requestHeader http.Header) (*WebSocket, erro
 }
 
 // OnMessage 注册一个处理消息的回调函数
-func (ws *WebSocket) OnMessage(handler func([]byte)) {
+func (ws *WebSocket) OnMessage(handleFunc func([]byte)) {
 	defer close(ws.Done)
 	for {
 		_, message, err := ws.Conn.ReadMessage()
@@ -62,18 +62,18 @@ func (ws *WebSocket) OnMessage(handler func([]byte)) {
 			log_utils.Error.Println("WebSocket Read ERROR:", err)
 			return
 		}
-		if handler != nil {
-			handler(message)
+		if handleFunc != nil {
+			handleFunc(message)
 		}
 		log_utils.Info.Printf("WebSocket Receive: %s", message)
 	}
 }
 
 // SendMessage 发送一条消息
-func (ws *WebSocket) SendMessage(data func() []byte) error {
+func (ws *WebSocket) SendMessage(messageType int, data func() []byte) error {
 	ws.mu.Lock()
 	defer ws.mu.Unlock()
-	return ws.Conn.WriteMessage(websocket.TextMessage, data())
+	return ws.Conn.WriteMessage(messageType, data())
 }
 
 // Close 关闭 WebSocket 连接
