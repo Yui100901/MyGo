@@ -141,9 +141,9 @@ func setBody(req *http.Request, contentType string, data any) error {
 	return nil
 }
 
-// SendRequest 发送HTTP请求并读取响应数据
-func (c *HTTPClient) SendRequest(r *HTTPRequest) ([]byte, error) {
-	resp, err := c.doRequest(r)
+// GetResponseData 发送HTTP请求并读取并返回响应数据
+func (c *HTTPClient) GetResponseData(r *HTTPRequest) ([]byte, error) {
+	resp, err := c.ExecuteRequest(r)
 	if err != nil {
 		return nil, err
 	}
@@ -157,9 +157,9 @@ func (c *HTTPClient) SendRequest(r *HTTPRequest) ([]byte, error) {
 	return respData, nil
 }
 
-// DownloadFile 发送HTTP请求并将响应数据保存为文件
-func (c *HTTPClient) DownloadFile(r *HTTPRequest, filepath string) error {
-	resp, err := c.doRequest(r)
+// SaveResponseToFile 发送HTTP请求并将响应数据保存为文件
+func (c *HTTPClient) SaveResponseToFile(r *HTTPRequest, filepath string) error {
+	resp, err := c.ExecuteRequest(r)
 	if err != nil {
 		return err
 	}
@@ -180,8 +180,8 @@ func (c *HTTPClient) DownloadFile(r *HTTPRequest, filepath string) error {
 	return nil
 }
 
-// doRequest 发送HTTP请求并返回响应
-func (c *HTTPClient) doRequest(r *HTTPRequest) (*http.Response, error) {
+// ExecuteRequest 发送HTTP请求并返回响应
+func (c *HTTPClient) ExecuteRequest(r *HTTPRequest) (*http.Response, error) {
 	req, err := r.generateRequest()
 	if err != nil {
 		return nil, fmt.Errorf("生成请求失败: %w", err)
