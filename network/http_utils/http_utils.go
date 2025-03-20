@@ -8,6 +8,7 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/url"
+	"os"
 	"strings"
 	"time"
 )
@@ -142,21 +143,61 @@ func setBody(req *http.Request, contentType string, data any) error {
 
 // SendRequest 发送HTTP请求并读取响应数据
 func (c *HTTPClient) SendRequest(r *HTTPRequest) ([]byte, error) {
-
-	req, err := r.generateRequest()
+	resp, err := c.doRequest(r)
 	if err != nil {
 		return nil, err
+	}
+	defer resp.Body.Close()
+
+	// 读取响应数据
+	respData, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("读取响应错误: %w", err)
+	}
+	return respData, nil
+}
+
+// DownloadFile 发送HTTP请求并将响应数据保存为文件
+func (c *HTTPClient) DownloadFile(r *HTTPRequest, filepath string) error {
+	resp, err := c.doRequest(r)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	// 创建目标文件
+	out, err := os.Create(filepath)
+	if err != nil {
+		return fmt.Errorf("创建文件失败: %w", err)
+	}
+	defer out.Close()
+
+	// 将响应数据写入文件
+	_, err = io.Copy(out, resp.Body)
+	if err != nil {
+		return fmt.Errorf("写入文件失败: %w", err)
+	}
+	return nil
+}
+
+// doRequest 发送HTTP请求并返回响应
+func (c *HTTPClient) doRequest(r *HTTPRequest) (*http.Response, error) {
+	req, err := r.generateRequest()
+	if err != nil {
+		return nil, fmt.Errorf("生成请求失败: %w", err)
 	}
 
 	resp, err := c.Client.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("发送请求错误:%w", err)
+		return nil, fmt.Errorf("发送请求失败: %w", err)
 	}
-	defer resp.Body.Close()
 
-	respData, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("读取响应错误:%w", err)
+	// 检查HTTP状态码
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		defer resp.Body.Close()
+		body, _ := io.ReadAll(resp.Body) // 尝试读取错误消息
+		return nil, fmt.Errorf("请求失败，状态码: %d，响应: %s", resp.StatusCode, string(body))
 	}
-	return respData, nil
+
+	return resp, nil
 }
