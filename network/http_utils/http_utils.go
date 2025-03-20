@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 )
 
 //
@@ -24,6 +25,16 @@ func NewHTTPClient() *HTTPClient {
 	return &HTTPClient{
 		Client: &http.Client{},
 	}
+}
+
+func (c *HTTPClient) SetProxy(proxyFunc func(req *http.Request) (*url.URL, error)) {
+	c.Client.Transport = &http.Transport{
+		Proxy: proxyFunc,
+	}
+}
+
+func (c *HTTPClient) SetTimeout(timeout time.Duration) {
+	c.Client.Timeout = timeout
 }
 
 // HTTPRequest 包含apiUrl和headers
