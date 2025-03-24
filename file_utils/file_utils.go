@@ -1,8 +1,11 @@
 package file_utils
 
 import (
+	"archive/tar"
 	"archive/zip"
+	"compress/gzip"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 )
@@ -122,14 +125,132 @@ func CreateDirectory(path string) (*FileData, error) {
 	return NewFileData(dir)
 }
 
-func AddFileToZip(zipWriter *zip.Writer, filename, content string) error {
-	writer, err := zipWriter.Create(filename)
+// DecompressGzip 解压 gzip 文件
+func DecompressGzip(src, dest string) error {
+	inFile, err := os.Open(src)
 	if err != nil {
-		return fmt.Errorf("无法创建 zip 归档: %v", err)
+		return err
 	}
-	_, err = writer.Write([]byte(content))
+	defer inFile.Close()
+
+	gzipReader, err := gzip.NewReader(inFile)
 	if err != nil {
-		return fmt.Errorf("无法写入 zip 归档: %v", err)
+		return err
 	}
-	return nil
+	defer gzipReader.Close()
+
+	outFile, err := os.Create(dest)
+	if err != nil {
+		return err
+	}
+	defer outFile.Close()
+
+	_, err = io.Copy(outFile, gzipReader)
+	return err
+}
+
+// CreateTarArchive 创建 TAR 文件
+func CreateTarArchive(src, dest string) error {
+	tarFile, err := os.Create(dest)
+	if err != nil {
+		return err
+	}
+	defer tarFile.Close()
+
+	tarWriter := tar.NewWriter(tarFile)
+	defer tarWriter.Close()
+
+	// 遍历目录并将内容写入 tar 文件
+	err = filepath.Walk(src, func(filePath string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+
+		// 跳过源目录本身
+		if filePath == src {
+			return nil
+		}
+
+		// 创建 tar 头信息
+		header, err := tar.FileInfoHeader(info, filePath)
+		if err != nil {
+			return err
+		}
+
+		// 设置归档文件的相对路径
+		relativePath, err := filepath.Rel(src, filePath)
+		header.Name = filepath.ToSlash(relativePath)
+
+		// 写入头信息
+		if err := tarWriter.WriteHeader(header); err != nil {
+			return err
+		}
+
+		// 如果是文件，写入文件数据
+		if !info.IsDir() {
+			file, err := os.Open(filePath)
+			if err != nil {
+				return err
+			}
+			defer file.Close()
+
+			_, err = io.Copy(tarWriter, file)
+			if err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+
+	return err
+}
+
+// CreateZipArchive 创建zip
+func CreateZipArchive(src, dest string) error {
+	// 创建zip文件
+	file, err := os.Create(dest)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	// 创建zip写入器
+	zipWriter := zip.NewWriter(file)
+	defer zipWriter.Close()
+
+	// 遍历目录并添加到zip中
+	err = filepath.Walk(src, func(filePath string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+
+		// 获取相对路径
+		relPath, err := filepath.Rel(src, filePath)
+		if err != nil {
+			return err
+		}
+
+		// 如果是目录，跳过（zip文件会自动处理目录结构）
+		if info.IsDir() {
+			return nil
+		}
+
+		// 创建zip文件的条目
+		zipFile, err := zipWriter.Create(relPath)
+		if err != nil {
+			return err
+		}
+
+		// 打开文件并写入zip条目
+		file, err := os.Open(filePath)
+		if err != nil {
+			return err
+		}
+		defer file.Close()
+
+		_, err = io.Copy(zipFile, file)
+		return err
+	})
+
+	return err
 }
