@@ -70,8 +70,8 @@ func TestDecompressZip(t *testing.T) {
 
 // 测试 DecompressGzip 函数
 func TestDecompressGzip(t *testing.T) {
-	src := "./testdata.gz" // 示例 GZIP 文件（需要事先准备）
-	dest := "./output.txt" // 解压后的文件
+	src := "./testdata.tar.gz" // 示例 GZIP 文件（需要事先准备）
+	dest := "./testdatatargz"  // 解压后的文件
 
 	// 解压 GZIP 文件
 	err := DecompressGzip(src, dest)
@@ -85,5 +85,24 @@ func TestDecompressGzip(t *testing.T) {
 	}
 
 	// 清理测试数据
-	os.Remove(dest)
+	//os.Remove(dest)
+}
+
+func TestCreateGzipArchive(t *testing.T) {
+	src := "./testdata.tar"     // 源文件夹
+	dest := "./testdata.tar.gz" // 目标 GZIP 文件
+
+	// 创建 gZIP 文件
+	err := CreateGzipArchive(src, dest)
+	if err != nil {
+		t.Errorf("CreateGzipArchive failed: %v", err)
+	}
+
+	// 验证目标文件是否存在
+	if _, err := os.Stat(dest); os.IsNotExist(err) {
+		t.Errorf("GZIP file not created: %v", err)
+	}
+
+	// 清理测试数据
+	//os.Remove(dest)
 }

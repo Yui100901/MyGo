@@ -306,3 +306,32 @@ func CreateZipArchive(src, dest string) error {
 
 	return err
 }
+
+// CreateGzipArchive 将文件压缩为 Gzip 格式
+func CreateGzipArchive(src, dest string) error {
+	// 打开源文件
+	inFile, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer inFile.Close()
+
+	// 创建 Gzip 文件
+	outFile, err := os.Create(dest)
+	if err != nil {
+		return err
+	}
+	defer outFile.Close()
+
+	// 创建 Gzip Writer
+	gzipWriter := gzip.NewWriter(outFile)
+	defer gzipWriter.Close()
+
+	// 将文件内容写入 Gzip 文件
+	_, err = io.Copy(gzipWriter, inFile)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
