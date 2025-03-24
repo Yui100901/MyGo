@@ -125,6 +125,58 @@ func CreateDirectory(path string) (*FileData, error) {
 	return NewFileData(dir)
 }
 
+// DecompressZip 解压 ZIP 文件到指定目录
+func DecompressZip(src, dest string) error {
+	// 打开 ZIP 文件
+	r, err := zip.OpenReader(src)
+	if err != nil {
+		return err
+	}
+	defer r.Close() // 在函数结束时释放资源
+
+	// 遍历 ZIP 文件中的每个文件
+	for _, file := range r.File {
+		fpath := filepath.Join(dest, file.Name)
+		if file.FileInfo().IsDir() {
+			// 如果是目录，则创建目录
+			if err := os.MkdirAll(fpath, os.ModePerm); err != nil {
+				return err
+			}
+			continue
+		}
+
+		// 确保目标文件的目录存在
+		if err := os.MkdirAll(filepath.Dir(fpath), os.ModePerm); err != nil {
+			return err
+		}
+
+		// 打开压缩文件内容
+		inFile, err := file.Open()
+		if err != nil {
+			return err
+		}
+
+		// 创建目标文件
+		outFile, err := os.Create(fpath)
+		if err != nil {
+			inFile.Close() // 及时关闭 inFile
+			return err
+		}
+
+		// 将内容复制到目标文件
+		_, err = io.Copy(outFile, inFile)
+		// 显式关闭文件
+		inFile.Close()
+		outFile.Close()
+
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
 // DecompressGzip 解压 gzip 文件
 func DecompressGzip(src, dest string) error {
 	inFile, err := os.Open(src)
