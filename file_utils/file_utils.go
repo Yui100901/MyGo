@@ -201,7 +201,8 @@ func DecompressGzip(src, dest string) error {
 	return err
 }
 
-// CreateTarArchive 创建 TAR 文件
+// CreateTarArchive 创建tar文件
+// 源目标可为文件或目录
 func CreateTarArchive(src, dest string) error {
 	tarFile, err := os.Create(dest)
 	if err != nil {
@@ -257,7 +258,8 @@ func CreateTarArchive(src, dest string) error {
 	return err
 }
 
-// CreateZipArchive 创建zip
+// CreateZipArchive 创建zip文件
+// 源目标可为文件或目录
 func CreateZipArchive(src, dest string) error {
 	// 创建zip文件
 	file, err := os.Create(dest)
@@ -307,7 +309,8 @@ func CreateZipArchive(src, dest string) error {
 	return err
 }
 
-// CreateGzipArchive 将文件压缩为 Gzip 格式
+// CreateGzipArchive 创建gzip文件
+// 源目标只能为文件，一般与tar一起使用，归档为tar.gz
 func CreateGzipArchive(src, dest string) error {
 	// 打开源文件
 	inFile, err := os.Open(src)
