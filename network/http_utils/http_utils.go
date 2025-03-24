@@ -96,7 +96,8 @@ func setUrlWithQuery(req *http.Request, url1 string, query map[string]string) er
 
 func setHeader(req *http.Request, headerMap map[string]string) {
 	for key, value := range headerMap {
-		req.Header.Add(key, value)
+		req.Header.Set(key, value)
+		fmt.Println(key, value)
 	}
 }
 
@@ -190,13 +191,6 @@ func (c *HTTPClient) ExecuteRequest(r *HTTPRequest) (*http.Response, error) {
 	resp, err := c.Client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("发送请求失败: %w", err)
-	}
-
-	// 检查HTTP状态码
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		defer resp.Body.Close()
-		body, _ := io.ReadAll(resp.Body) // 尝试读取错误消息
-		return nil, fmt.Errorf("请求失败，状态码: %d，响应: %s", resp.StatusCode, string(body))
 	}
 
 	return resp, nil
