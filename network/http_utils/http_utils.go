@@ -40,22 +40,20 @@ func (c *HTTPClient) SetTimeout(timeout time.Duration) {
 
 // HTTPRequest 包含apiUrl和headers
 type HTTPRequest struct {
-	Method      string
-	APIUrl      string
-	Query       map[string]string
-	Header      map[string]string
-	ContentType string
-	Body        any
+	Method string
+	APIUrl string
+	Query  map[string]string
+	Header map[string]string
+	Body   any
 }
 
-func NewHTTPRequest(method, apiUrl string, query, header map[string]string, contentType string, body any) *HTTPRequest {
+func NewHTTPRequest(method, apiUrl string, query, header map[string]string, body any) *HTTPRequest {
 	return &HTTPRequest{
-		Method:      method,
-		APIUrl:      apiUrl,
-		Query:       query,
-		Header:      header,
-		ContentType: contentType,
-		Body:        body,
+		Method: method,
+		APIUrl: apiUrl,
+		Query:  query,
+		Header: header,
+		Body:   body,
 	}
 }
 
@@ -67,14 +65,12 @@ func (hr *HTTPRequest) generateRequest() (*http.Request, error) {
 			return nil, err
 		}
 	}
-	if hr.ContentType != "" {
-		hr.Header["Content-Type"] = hr.ContentType
-	}
 	if len(hr.Header) != 0 {
 		setHeader(req, hr.Header)
 	}
 	if hr.Body != nil {
-		err := setBody(req, hr.ContentType, hr.Body)
+		contentType := req.Header.Get("Content-Type")
+		err := setBody(req, contentType, hr.Body)
 		if err != nil {
 			return nil, err
 		}
