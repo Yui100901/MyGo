@@ -59,11 +59,9 @@ func NewHTTPRequest(method, apiUrl string, query, header map[string]string, body
 
 func (hr *HTTPRequest) generateRequest() (*http.Request, error) {
 	req, _ := http.NewRequest(hr.Method, "", nil)
-	if len(hr.Query) != 0 {
-		err := setUrlWithQuery(req, hr.APIUrl, hr.Query)
-		if err != nil {
-			return nil, err
-		}
+	err := setUrlWithQuery(req, hr.APIUrl, hr.Query)
+	if err != nil {
+		return nil, err
 	}
 	if len(hr.Header) != 0 {
 		setHeader(req, hr.Header)
@@ -91,7 +89,9 @@ func setUrlWithQuery(req *http.Request, url1 string, query map[string]string) er
 	if err != nil {
 		return err
 	}
-	reqUrl.RawQuery = encodeUrlValues(query)
+	if len(query) != 0 {
+		reqUrl.RawQuery = encodeUrlValues(query)
+	}
 	req.URL = reqUrl
 	return nil
 }
