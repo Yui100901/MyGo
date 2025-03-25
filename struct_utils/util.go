@@ -1,7 +1,10 @@
 package struct_utils
 
 import (
+	"bytes"
+	"encoding/gob"
 	"encoding/json"
+	"encoding/xml"
 	"fmt"
 	"gopkg.in/yaml.v2"
 	"reflect"
@@ -114,6 +117,8 @@ type DataFormat int
 const (
 	JSON DataFormat = iota
 	YAML
+	XML
+	Gob
 )
 
 // NewStructFromData 根据传入的类型和数据格式进行转换
@@ -126,6 +131,11 @@ func NewStructFromData[T any](data []byte, format DataFormat) (*T, error) {
 		err = json.Unmarshal(data, &result)
 	case YAML:
 		err = yaml.Unmarshal(data, &result)
+	case XML:
+		err = xml.Unmarshal(data, &result)
+	case Gob:
+		decoder := gob.NewDecoder(bytes.NewReader(data))
+		err = decoder.Decode(&result)
 	default:
 		return nil, fmt.Errorf("unsupported data format")
 	}
