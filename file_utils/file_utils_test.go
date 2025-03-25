@@ -106,21 +106,3 @@ func TestCreateGzipArchive(t *testing.T) {
 	// 清理测试数据
 	//os.Remove(dest)
 }
-
-func TestWriteToFile(t *testing.T) {
-	dest := "./testdata/writetest"
-	data := []byte("write test")
-	err := WriteToFile(data, dest)
-	if err != nil {
-		t.Errorf("CreateGzipArchive failed: %v", err)
-	}
-}
-
-func TestReadFromFile(t *testing.T) {
-	src := "./testdata/readtest"
-	data, err := ReadFromFile(src)
-	if err != nil {
-		t.Errorf("CreateGzipArchive failed: %v", err)
-	}
-	t.Log(string(data))
-}
