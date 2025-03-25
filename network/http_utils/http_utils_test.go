@@ -12,9 +12,9 @@ import (
 
 func TestHTTPClient(t *testing.T) {
 	c := NewHTTPClient()
-	data, err := c.GetResponseData(NewHTTPRequest(http.MethodGet, "http://www.example.com", map[string]string{
+	data, err := c.GetResponseData(NewHTTPRequest(http.MethodGet, "http://www.example.com?a=b", map[string]string{
 		"foo": "bar",
-	}, nil, "", nil))
+	}, nil, nil))
 	if err != nil {
 		t.Log(err)
 	}

@@ -89,10 +89,10 @@ func setUrlWithQuery(req *http.Request, url1 string, query map[string]string) er
 	if err != nil {
 		return err
 	}
+	req.URL = reqUrl
 	if len(query) != 0 {
 		reqUrl.RawQuery = encodeUrlValues(query)
 	}
-	req.URL = reqUrl
 	return nil
 }
 
