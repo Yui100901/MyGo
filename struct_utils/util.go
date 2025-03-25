@@ -121,8 +121,8 @@ const (
 	Gob
 )
 
-// NewStructFromData 根据传入的类型和数据格式进行转换
-func NewStructFromData[T any](data []byte, format DataFormat) (*T, error) {
+// UnmarshalData 将数据反序列化为指定类型的结构体
+func UnmarshalData[T any](data []byte, format DataFormat) (*T, error) {
 	var result T
 	var err error
 
@@ -137,12 +137,40 @@ func NewStructFromData[T any](data []byte, format DataFormat) (*T, error) {
 		decoder := gob.NewDecoder(bytes.NewReader(data))
 		err = decoder.Decode(&result)
 	default:
-		return nil, fmt.Errorf("unsupported data format")
+		return nil, fmt.Errorf("unsupported data format: %v", format)
 	}
 
 	if err != nil {
-		return nil, fmt.Errorf("error unmarshalling data: %v", err)
+		return nil, fmt.Errorf("failed to unmarshal data: %v", err)
 	}
 
 	return &result, nil
+}
+
+// MarshalData 将结构体序列化为指定格式的数据
+func MarshalData[T any](value *T, format DataFormat) ([]byte, error) {
+	var result []byte
+	var err error
+
+	switch format {
+	case JSON:
+		result, err = json.Marshal(value)
+	case YAML:
+		result, err = yaml.Marshal(value)
+	case XML:
+		result, err = xml.Marshal(value)
+	case Gob:
+		var buffer bytes.Buffer
+		encoder := gob.NewEncoder(&buffer)
+		err = encoder.Encode(value)
+		result = buffer.Bytes()
+	default:
+		return nil, fmt.Errorf("unsupported data format: %v", format)
+	}
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal data: %v", err)
+	}
+
+	return result, nil
 }
