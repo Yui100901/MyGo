@@ -106,3 +106,12 @@ func TestCreateGzipArchive(t *testing.T) {
 	// 清理测试数据
 	//os.Remove(dest)
 }
+
+func TestWriteToFile(t *testing.T) {
+	dest := "./writetest"
+	data := []byte("hello")
+	err := WriteToFile(data, dest)
+	if err != nil {
+		t.Errorf("CreateGzipArchive failed: %v", err)
+	}
+}

@@ -338,3 +338,21 @@ func CreateGzipArchive(src, dest string) error {
 
 	return nil
 }
+
+// WriteToFile 将字节数据写入文件
+func WriteToFile(data []byte, dest string) error {
+	// 打开或创建文件
+	file, err := os.OpenFile(dest, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
+	if err != nil {
+		return err // 返回文件打开/创建失败的错误
+	}
+	defer file.Close() // 确保文件操作完成后关闭文件
+
+	// 将字节数据写入文件
+	_, err = file.Write(data)
+	if err != nil {
+		return err // 返回写入失败的错误
+	}
+
+	return nil // 成功则返回 nil
+}
