@@ -61,17 +61,23 @@ func NewHTTPRequest(method, apiUrl string, query, header map[string]string, cont
 
 func (hr *HTTPRequest) generateRequest() (*http.Request, error) {
 	req, _ := http.NewRequest(hr.Method, "", nil)
-	err := setUrlWithQuery(req, hr.APIUrl, hr.Query)
-	if err != nil {
-		return nil, err
+	if len(hr.Query) != 0 {
+		err := setUrlWithQuery(req, hr.APIUrl, hr.Query)
+		if err != nil {
+			return nil, err
+		}
 	}
 	if hr.ContentType != "" {
 		hr.Header["Content-Type"] = hr.ContentType
 	}
-	setHeader(req, hr.Header)
-	err = setBody(req, hr.ContentType, hr.Body)
-	if err != nil {
-		return nil, err
+	if len(hr.Header) != 0 {
+		setHeader(req, hr.Header)
+	}
+	if hr.Body != nil {
+		err := setBody(req, hr.ContentType, hr.Body)
+		if err != nil {
+			return nil, err
+		}
 	}
 	return req, nil
 }
@@ -97,7 +103,6 @@ func setUrlWithQuery(req *http.Request, url1 string, query map[string]string) er
 func setHeader(req *http.Request, headerMap map[string]string) {
 	for key, value := range headerMap {
 		req.Header.Set(key, value)
-		fmt.Println(key, value)
 	}
 }
 
@@ -142,7 +147,7 @@ func setBody(req *http.Request, contentType string, data any) error {
 	return nil
 }
 
-// GetResponseData 发送HTTP请求并读取并返回响应数据
+// GetResponseData 发送HTTP请求读取并返回响应数据
 func (c *HTTPClient) GetResponseData(r *HTTPRequest) ([]byte, error) {
 	resp, err := c.ExecuteRequest(r)
 	if err != nil {
