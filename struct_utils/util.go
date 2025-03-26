@@ -148,7 +148,7 @@ func UnmarshalData[T any](data []byte, format DataFormat) (*T, error) {
 }
 
 // MarshalData 将结构体序列化为指定格式的数据
-func MarshalData[T any](value *T, format DataFormat) ([]byte, error) {
+func MarshalData(value any, format DataFormat) ([]byte, error) {
 	var result []byte
 	var err error
 
