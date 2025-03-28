@@ -4,9 +4,11 @@ import (
 	"archive/tar"
 	"archive/zip"
 	"compress/gzip"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 //
@@ -17,6 +19,20 @@ import (
 // CreateTarArchive 创建tar文件
 // 源目标可为文件或目录
 func CreateTarArchive(src, dest string) error {
+	// 获取源路径的元信息
+	srcInfo, err := os.Stat(src)
+	if err != nil {
+		return fmt.Errorf("无法获取源路径信息: %v", err)
+	}
+
+	// 根据类型确定基准路径
+	var basePath string
+	if srcInfo.IsDir() {
+		basePath = src
+	} else {
+		basePath = filepath.Dir(src)
+	}
+
 	tarFile, err := os.Create(dest)
 	if err != nil {
 		return err
@@ -26,49 +42,116 @@ func CreateTarArchive(src, dest string) error {
 	tarWriter := tar.NewWriter(tarFile)
 	defer tarWriter.Close()
 
-	// 遍历目录并将内容写入 tar 文件
-	err = filepath.Walk(src, func(filePath string, info os.FileInfo, err error) error {
+	// 遍历文件树
+	return filepath.Walk(src, func(filePath string, info os.FileInfo, err error) error {
 		if err != nil {
-			return err
+			return fmt.Errorf("遍历文件失败: %v", err)
 		}
 
-		// 跳过源目录本身
-		if filePath == src {
+		// 跳过源目录自身（如果是目录）
+		if filePath == src && info.IsDir() {
 			return nil
 		}
 
-		// 创建 tar 头信息
-		header, err := tar.FileInfoHeader(info, filePath)
+		// 计算相对于基准路径的相对路径
+		relPath, err := filepath.Rel(basePath, filePath)
 		if err != nil {
-			return err
+			return fmt.Errorf("计算相对路径失败: %v", err)
 		}
+		relPath = filepath.ToSlash(relPath) // 统一为斜杠路径
 
-		// 设置归档文件的相对路径
-		relativePath, err := filepath.Rel(src, filePath)
-		header.Name = filepath.ToSlash(relativePath)
+		// 创建 tar 头部信息
+		header, err := tar.FileInfoHeader(info, relPath)
+		if err != nil {
+			return fmt.Errorf("创建头部失败: %v", err)
+		}
+		header.Name = relPath // 关键：覆盖自动生成的路径
 
-		// 写入头信息
+		// 写入头部
 		if err := tarWriter.WriteHeader(header); err != nil {
-			return err
+			return fmt.Errorf("写入头部失败: %v", err)
 		}
 
-		// 如果是文件，写入文件数据
+		// 如果是文件，写入内容
 		if !info.IsDir() {
 			file, err := os.Open(filePath)
 			if err != nil {
-				return err
+				return fmt.Errorf("打开文件失败: %v", err)
 			}
 			defer file.Close()
 
-			_, err = io.Copy(tarWriter, file)
-			if err != nil {
-				return err
+			if _, err := io.Copy(tarWriter, file); err != nil {
+				return fmt.Errorf("写入内容失败: %v", err)
 			}
 		}
+
 		return nil
 	})
+}
 
-	return err
+func DecompressTar(dst string, r io.Reader) error {
+	tr := tar.NewReader(r)
+
+	for {
+		hdr, err := tr.Next()
+		if err == io.EOF {
+			break // 结束循环
+		}
+		if err != nil {
+			return fmt.Errorf("tar.Next() failed: %v", err)
+		}
+
+		// 防止路径遍历漏洞
+		targetPath := filepath.Join(dst, hdr.Name)
+		if !strings.HasPrefix(filepath.Clean(targetPath), filepath.Clean(dst)) {
+			return fmt.Errorf("路径不安全: %s", hdr.Name)
+		}
+
+		// 根据文件类型处理
+		switch hdr.Typeflag {
+		case tar.TypeDir:
+			// 创建目录并设置权限
+			if err := os.MkdirAll(targetPath, os.FileMode(hdr.Mode)); err != nil {
+				return fmt.Errorf("创建目录失败: %v", err)
+			}
+		case tar.TypeReg:
+			// 确保父目录存在
+			if err := os.MkdirAll(filepath.Dir(targetPath), 0755); err != nil {
+				return fmt.Errorf("创建父目录失败: %v", err)
+			}
+
+			// 使用匿名函数包裹文件操作，确保defer及时执行
+			if err := func() error {
+				// 创建文件并设置权限
+				f, err := os.OpenFile(targetPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, os.FileMode(hdr.Mode))
+				if err != nil {
+					return fmt.Errorf("创建文件失败: %v", err)
+				}
+				defer f.Close() // 此defer在匿名函数结束时触发
+
+				// 写入文件内容
+				if _, err := io.Copy(f, tr); err != nil {
+					return fmt.Errorf("写入文件内容失败: %v", err)
+				}
+
+				// 显式设置权限（解决umask影响）
+				if err := os.Chmod(targetPath, os.FileMode(hdr.Mode)); err != nil {
+					return fmt.Errorf("设置文件权限失败: %v", err)
+				}
+				return nil
+			}(); err != nil {
+				return err // 传递内部错误
+			}
+		case tar.TypeSymlink:
+			if err := os.Symlink(hdr.Linkname, targetPath); err != nil {
+				return fmt.Errorf("创建符号链接失败: %v", err)
+			}
+		default:
+			return fmt.Errorf("不支持的文件类型: %v in %s", hdr.Typeflag, hdr.Name)
+		}
+	}
+
+	return nil
 }
 
 // CreateZipArchive 创建zip文件
@@ -133,7 +216,7 @@ func DecompressZip(src, dest string) error {
 
 	// 遍历 ZIP 文件中的每个文件
 	for _, file := range r.File {
-		fpath := filepath.Join(dest, file.Name)
+		fpath := filepath.Join(dest, filepath.FromSlash(file.Name))
 		if file.FileInfo().IsDir() {
 			// 如果是目录，则创建目录
 			if err := os.MkdirAll(fpath, os.ModePerm); err != nil {
@@ -180,9 +263,9 @@ func CreateGzipArchive(src, dest string) error {
 	// 打开源文件
 	inFile, err := os.Open(src)
 	if err != nil {
+		inFile.Close()
 		return err
 	}
-	defer inFile.Close()
 
 	// 创建 Gzip 文件
 	outFile, err := os.Create(dest)
