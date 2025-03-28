@@ -15,7 +15,7 @@ type ConcurrentFunc[T any] interface {
 	ToConcurrentFunc() func() (T, error)
 }
 
-// ConcurrentRun 异步执行传入的函数集合，返回结果通道和错误通道。
+// ConcurrentRun 并发执行传入的函数集合，返回结果通道和错误通道。
 // 每个函数的结果会发送到结果通道，错误（包括 panic 转换的错误）发送到错误通道。
 // 当所有函数执行完成后，通道会自动关闭。
 func ConcurrentRun[T any](funcs ...func() (T, error)) (<-chan T, <-chan error) {
@@ -28,7 +28,7 @@ func ConcurrentRun[T any](funcs ...func() (T, error)) (<-chan T, <-chan error) {
 	processFunc := func(f func() (T, error)) {
 		defer wg.Done()
 
-		// 捕获 panic 并添加堆栈跟踪
+		// 捕获 panic
 		defer func() {
 			if r := recover(); r != nil {
 				errMsg := fmt.Sprintf("panic: %v", r)
