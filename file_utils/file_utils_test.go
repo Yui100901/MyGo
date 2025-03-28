@@ -1,6 +1,7 @@
 package file_utils
 
 import (
+	"fmt"
 	"os"
 	"testing"
 )
@@ -28,6 +29,26 @@ func TestCreateTarArchive(t *testing.T) {
 
 	// 清理测试数据
 	//os.Remove(dest)
+}
+
+func TestDecompressTarArchive(t *testing.T) {
+	srcFile := "testdata.tar"
+	dstDir := "./testdata-tar-extracted"
+
+	// 打开tar文件
+	file, err := os.Open(srcFile)
+	if err != nil {
+		fmt.Printf("打开文件失败: %v\n", err)
+		return
+	}
+	defer file.Close()
+
+	// 解压tar文件
+	if err := DecompressTar(dstDir, file); err != nil {
+		fmt.Printf("解压失败: %v\n", err)
+	} else {
+		fmt.Println("解压成功！")
+	}
 }
 
 // 测试 CreateZipArchive 函数
