@@ -32,19 +32,11 @@ func TestCreateTarArchive(t *testing.T) {
 }
 
 func TestDecompressTarArchive(t *testing.T) {
-	srcFile := "testdata.tar"
-	dstDir := "./testdata-tar-decompress"
-
-	// 打开tar文件
-	file, err := os.Open(srcFile)
-	if err != nil {
-		fmt.Printf("打开文件失败: %v\n", err)
-		return
-	}
-	defer file.Close()
+	src := "testdata.tar"
+	dest := "./testdata-tar-decompress"
 
 	// 解压tar文件
-	if err := DecompressTar(dstDir, file); err != nil {
+	if err := DecompressTar(src, dest); err != nil {
 		fmt.Printf("解压失败: %v\n", err)
 	} else {
 		fmt.Println("解压成功！")

@@ -89,8 +89,15 @@ func CreateTarArchive(src, dest string) error {
 	})
 }
 
-func DecompressTar(dst string, r io.Reader) error {
-	tr := tar.NewReader(r)
+func DecompressTar(src, dest string) error {
+	// 打开tar文件
+	file, err := os.Open(src)
+	if err != nil {
+		return fmt.Errorf("打开文件失败: %v\n", err)
+	}
+	defer file.Close()
+
+	tr := tar.NewReader(file)
 
 	for {
 		hdr, err := tr.Next()
@@ -102,8 +109,8 @@ func DecompressTar(dst string, r io.Reader) error {
 		}
 
 		// 防止路径遍历漏洞
-		targetPath := filepath.Join(dst, hdr.Name)
-		if !strings.HasPrefix(filepath.Clean(targetPath), filepath.Clean(dst)) {
+		targetPath := filepath.Join(dest, hdr.Name)
+		if !strings.HasPrefix(filepath.Clean(targetPath), filepath.Clean(dest)) {
 			return fmt.Errorf("路径不安全: %s", hdr.Name)
 		}
 
