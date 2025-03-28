@@ -223,44 +223,41 @@ func DecompressZip(src, dest string) error {
 
 	// 遍历 ZIP 文件中的每个文件
 	for _, file := range r.File {
-		fpath := filepath.Join(dest, filepath.FromSlash(file.Name))
-		if file.FileInfo().IsDir() {
-			// 如果是目录，则创建目录
-			if err := os.MkdirAll(fpath, os.ModePerm); err != nil {
+		if err := func() error {
+			fpath := filepath.Join(dest, filepath.FromSlash(file.Name))
+			if file.FileInfo().IsDir() {
+				// 如果是目录，则创建目录
+				if err := os.MkdirAll(fpath, os.ModePerm); err != nil {
+					return err
+				}
+				return nil
+			}
+
+			// 确保目标文件的目录存在
+			if err := os.MkdirAll(filepath.Dir(fpath), os.ModePerm); err != nil {
 				return err
 			}
-			continue
-		}
+			// 打开压缩文件内容
+			inFile, err := file.Open()
+			if err != nil {
+				return err
+			}
+			defer inFile.Close()
 
-		// 确保目标文件的目录存在
-		if err := os.MkdirAll(filepath.Dir(fpath), os.ModePerm); err != nil {
+			// 创建目标文件
+			outFile, err := os.Create(fpath)
+			if err != nil {
+				return err
+			}
+			defer outFile.Close()
+
+			// 复制内容
+			_, err = io.Copy(outFile, inFile)
 			return err
-		}
-
-		// 打开压缩文件内容
-		inFile, err := file.Open()
-		if err != nil {
-			return err
-		}
-
-		// 创建目标文件
-		outFile, err := os.Create(fpath)
-		if err != nil {
-			inFile.Close() // 及时关闭 inFile
-			return err
-		}
-
-		// 将内容复制到目标文件
-		_, err = io.Copy(outFile, inFile)
-		// 显式关闭文件
-		inFile.Close()
-		outFile.Close()
-
-		if err != nil {
+		}(); err != nil {
 			return err
 		}
 	}
-
 	return nil
 }
 
