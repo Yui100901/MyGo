@@ -86,23 +86,23 @@ func TraverseDirFiles(dir string, recursive bool) ([]*FileData, []*FileData, err
 }
 
 // Replace 函数，用于替换源文件到目标文件
-func Replace(source, target string) (string, error) {
-	_, err := os.Stat(source)
+func Replace(src, dest string) (string, error) {
+	_, err := os.Stat(src)
 	if os.IsNotExist(err) {
-		return "", fmt.Errorf("source file %s does not exist", source)
+		return "", fmt.Errorf("src file %s does not exist", src)
 	}
 
-	_, err = os.Stat(target)
+	_, err = os.Stat(dest)
 	if err == nil {
-		os.Remove(target)
+		os.Remove(dest)
 	}
 
-	input, err := os.ReadFile(source)
+	input, err := os.ReadFile(src)
 	if err != nil {
 		return "", err
 	}
 
-	err = os.WriteFile(target, input, 0644)
+	err = os.WriteFile(dest, input, 0644)
 	if err != nil {
 		return "", err
 	}
