@@ -1,9 +1,8 @@
 package concurrency
 
 import (
-	"fmt"
-	"io/ioutil"
-	"net/http"
+	"errors"
+	"strings"
 	"testing"
 	"time"
 )
@@ -13,152 +12,150 @@ import (
 // @Date 2025/3/28 13 13
 //
 
-func TestConcurrentRun(t *testing.T) {
-	tests := []struct {
-		name      string
-		funcs     []func() (string, error)
-		wantRes   []string
-		wantErrs  []string
-		sleepTime time.Duration
-	}{
-		{
-			name: "normal execution",
-			funcs: []func() (string, error){
-				func() (string, error) { time.Sleep(1 * time.Second); return "Task 1", nil },
-				func() (string, error) { time.Sleep(500 * time.Millisecond); return "Task 2", nil },
-			},
-			wantRes:   []string{"Task 1", "Task 2"},
-			wantErrs:  []string{},
-			sleepTime: 2 * time.Second,
-		},
-		{
-			name: "error handling",
-			funcs: []func() (string, error){
-				func() (string, error) { time.Sleep(1 * time.Second); return "", fmt.Errorf("error 1") },
-				func() (string, error) { return "", fmt.Errorf("error 2") },
-			},
-			wantRes:   []string{},
-			wantErrs:  []string{"error 1", "error 2"},
-			sleepTime: 2 * time.Second,
-		},
-		{
-			name: "panic handling",
-			funcs: []func() (string, error){
-				func() (string, error) { panic("panic occurred") },
-			},
-			wantRes:   []string{},
-			wantErrs:  []string{"panic: panic occurred"},
-			sleepTime: 1 * time.Second,
-		},
+func TestConcurrentRun_Success(t *testing.T) {
+	funcs := []func() (int, error){
+		func() (int, error) { return 1, nil },
+		func() (int, error) { return 2, nil },
+		func() (int, error) { return 3, nil },
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			results, errors := ConcurrentRun(tt.funcs...)
+	results := ConcurrentRun(funcs)
+	resultMap := make(map[int]TaskResult[int])
 
-			// 使用通道接收结果
-			var res []string
-			go func() {
-				for r := range results {
-					res = append(res, r)
-				}
-			}()
+	for res := range results {
+		resultMap[res.Index] = res
+	}
 
-			// 使用通道接收错误
-			var errs []string
-			go func() {
-				for e := range errors {
-					errs = append(errs, e.Error())
-				}
-			}()
+	if len(resultMap) != len(funcs) {
+		t.Fatalf("Expected %d results, got %d", len(funcs), len(resultMap))
+	}
 
-			// 等待测试完成
-			time.Sleep(tt.sleepTime)
-
-			// 验证结果
-			if len(res) != len(tt.wantRes) {
-				t.Errorf("expected results %v, got %v", tt.wantRes, res)
-			}
-			for _, r := range tt.wantRes {
-				found := false
-				for _, actual := range res {
-					if r == actual {
-						found = true
-						break
-					}
-				}
-				if !found {
-					t.Errorf("expected result %v not found in %v", r, res)
-				}
-			}
-
-			// 验证错误
-			if len(errs) != len(tt.wantErrs) {
-				t.Errorf("expected errors %v, got %v", tt.wantErrs, errs)
-			}
-			for _, e := range tt.wantErrs {
-				found := false
-				for _, actual := range errs {
-					if e == actual {
-						found = true
-						break
-					}
-				}
-				if !found {
-					t.Errorf("expected error %v not found in %v", e, errs)
-				}
-			}
-		})
+	for i := 0; i < len(funcs); i++ {
+		res, exists := resultMap[i]
+		if !exists {
+			t.Errorf("Result for index %d missing", i)
+			continue
+		}
+		expected, _ := funcs[i]()
+		if res.Value != expected || res.Err != nil {
+			t.Errorf("Index %d: expected (%d, nil), got (%d, %v)",
+				i, expected, res.Value, res.Err)
+		}
 	}
 }
 
-func TestConcurrentRun2(t *testing.T) {
-	// 定义要下载的网页 URL
-	urls := []string{
-		"https://www.example.com",
-		"https://www.google.com",
-		"https://www.bing.com",
-		"https://www.invalid-url.com", // 模拟一个错误的 URL
+func TestConcurrentRun_ErrorHandling(t *testing.T) {
+	testErr := errors.New("intentional error")
+	funcs := []func() (string, error){
+		func() (string, error) { return "success", nil },
+		func() (string, error) { return "", testErr },
+		func() (string, error) { return "another", nil },
 	}
 
-	// 为每个 URL 创建一个下载函数
-	funcs := make([]func() (string, error), len(urls))
-	for i, url := range urls {
-		funcs[i] = func(u string) func() (string, error) {
-			return func() (string, error) {
-				resp, err := http.Get(u)
-				if err != nil {
-					return "", fmt.Errorf("failed to download %s: %v", u, err)
-				}
-				defer resp.Body.Close()
+	results := ConcurrentRun(funcs)
+	errorCount := 0
 
-				body, err := ioutil.ReadAll(resp.Body)
-				if err != nil {
-					return "", fmt.Errorf("failed to read response from %s: %v", u, err)
-				}
-
-				return string(body), nil
+	for res := range results {
+		if res.Index == 1 {
+			if res.Err != testErr {
+				t.Errorf("Expected error %v, got %v", testErr, res.Err)
 			}
-		}(url)
+			errorCount++
+		} else if res.Err != nil {
+			t.Errorf("Unexpected error at index %d: %v", res.Index, res.Err)
+		}
 	}
 
-	// 并发执行下载任务
-	results, errors := ConcurrentRun(funcs...)
+	if errorCount != 1 {
+		t.Errorf("Expected 1 error, got %d", errorCount)
+	}
+}
 
-	// 处理下载结果
-	go func() {
-		for res := range results {
-			fmt.Println("Page content received:", len(res), "bytes")
+func TestConcurrentRun_PanicHandling(t *testing.T) {
+	funcs := []func() (bool, error){
+		func() (bool, error) { return true, nil },
+		func() (bool, error) { panic("test panic") },
+		func() (bool, error) { return false, nil },
+	}
+
+	results := ConcurrentRun(funcs)
+	panicFound := false
+
+	for res := range results {
+		if res.Index == 1 {
+			if res.Err == nil || !strings.Contains(res.Err.Error(), "panic: test panic") {
+				t.Errorf("Expected panic error, got %v", res.Err)
+			}
+			panicFound = true
+		} else if res.Err != nil {
+			t.Errorf("Unexpected error at index %d: %v", res.Index, res.Err)
 		}
-	}()
+	}
 
-	// 处理错误
-	go func() {
-		for err := range errors {
-			fmt.Println("Error:", err)
+	if !panicFound {
+		t.Error("Panic result not found")
+	}
+}
+
+func TestConcurrentRun_Concurrency(t *testing.T) {
+	const (
+		taskDuration = 100 * time.Millisecond
+		numTasks     = 5
+	)
+
+	// 创建模拟耗时任务
+	funcs := make([]func() (int, error), numTasks)
+	for i := 0; i < numTasks; i++ {
+		funcs[i] = func() (int, error) {
+			time.Sleep(taskDuration)
+			return 0, nil
 		}
-	}()
+	}
 
-	// 防止主线程过早退出
-	time.Sleep(5 * time.Second)
+	// 测试并发版本
+	start := time.Now()
+	results := ConcurrentRun(funcs)
+	for range results { // 等待所有结果完成
+	}
+	concurrentTime := time.Since(start)
+
+	// 测试顺序执行
+	start = time.Now()
+	for _, fn := range funcs {
+		fn()
+	}
+	sequentialTime := time.Since(start)
+
+	t.Logf("Concurrent time: %v, Sequential time: %v", concurrentTime, sequentialTime)
+
+	// 验证并发执行时间显著短于顺序执行
+	maxAllowed := taskDuration + 50*time.Millisecond
+	if concurrentTime > maxAllowed {
+		t.Errorf("Concurrent execution took too long: %v (max allowed %v)",
+			concurrentTime, maxAllowed)
+	}
+
+	// 验证顺序执行时间符合预期
+	minExpected := time.Duration(numTasks) * taskDuration
+	if sequentialTime < minExpected {
+		t.Errorf("Sequential execution too fast: %v (minimum expected %v)",
+			sequentialTime, minExpected)
+	}
+}
+
+func TestConcurrentRun_ChannelClosing(t *testing.T) {
+	funcs := []func() (int, error){
+		func() (int, error) { return 1, nil },
+	}
+
+	results := ConcurrentRun(funcs)
+	_, ok := <-results // 第一次读取应该成功
+	if !ok {
+		t.Fatal("Channel closed too early")
+	}
+
+	_, ok = <-results // 第二次读取应该失败
+	if ok {
+		t.Error("Channel not closed after all results")
+	}
 }
