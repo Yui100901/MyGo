@@ -314,3 +314,92 @@ func DecompressGzip(src, dest string) error {
 	_, err = io.Copy(outFile, gzipReader)
 	return err
 }
+
+func CreateTarGzArchive(src, dest string) error {
+	// 获取源信息
+	srcInfo, err := os.Stat(src)
+	if err != nil {
+		return fmt.Errorf("无法获取源路径信息: %v", err)
+	}
+
+	// 创建目标文件
+	gzFile, err := os.Create(dest)
+	if err != nil {
+		return fmt.Errorf("创建tar.gz文件失败: %v", err)
+	}
+	defer gzFile.Close()
+
+	// 创建 Gzip Writer
+	gzipWriter := gzip.NewWriter(gzFile)
+	defer gzipWriter.Close()
+
+	// 创建 Tar Writer
+	tarWriter := tar.NewWriter(gzipWriter)
+	defer tarWriter.Close()
+
+	// 动态计算基准路径（与CreateTarArchive逻辑一致）
+	var basePath string
+	if srcInfo.IsDir() {
+		basePath = src
+	} else {
+		basePath = filepath.Dir(src)
+	}
+
+	// 遍历文件树并写入压缩流
+	return filepath.Walk(src, func(filePath string, info os.FileInfo, err error) error {
+		if err != nil {
+			return fmt.Errorf("遍历文件失败: %v", err)
+		}
+
+		// 跳过源目录自身（如果是目录）
+		if filePath == src && info.IsDir() {
+			return nil
+		}
+
+		// 计算相对路径
+		relPath, err := filepath.Rel(basePath, filePath)
+		if err != nil {
+			return fmt.Errorf("计算相对路径失败: %v", err)
+		}
+		relPath = filepath.ToSlash(relPath)
+
+		// 创建 tar 头部
+		header, err := tar.FileInfoHeader(info, relPath)
+		if err != nil {
+			return fmt.Errorf("创建头部失败: %v", err)
+		}
+		header.Name = relPath // 覆盖自动生成的路径
+
+		// 写入头部
+		if err := tarWriter.WriteHeader(header); err != nil {
+			return fmt.Errorf("写入头部失败: %v", err)
+		}
+
+		// 如果是文件，写入内容
+		if !info.IsDir() {
+			file, err := os.Open(filePath)
+			if err != nil {
+				return fmt.Errorf("打开文件失败: %v", err)
+			}
+			defer file.Close()
+
+			if _, err := io.Copy(tarWriter, file); err != nil {
+				return fmt.Errorf("写入内容失败: %v", err)
+			}
+		}
+
+		return nil
+	})
+}
+
+func DecompressTarGz(gzFile, dest string) error {
+	// 先解压gzip
+	tmpTar := filepath.Join(os.TempDir(), "temp.tar")
+	if err := DecompressGzip(gzFile, tmpTar); err != nil {
+		return err
+	}
+	defer os.Remove(tmpTar) // 清理临时文件
+
+	// 再解压tar
+	return DecompressTar(tmpTar, dest)
+}
