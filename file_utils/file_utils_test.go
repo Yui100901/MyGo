@@ -24,7 +24,7 @@ func TestCreateTarArchive(t *testing.T) {
 
 	// 验证目标文件是否存在
 	if _, err := os.Stat(dest); os.IsNotExist(err) {
-		t.Errorf("TAR file not created: %v", err)
+		t.Errorf("File not created: %v", err)
 	}
 
 	// 清理测试数据
@@ -56,7 +56,7 @@ func TestCreateZipArchive(t *testing.T) {
 
 	// 验证目标文件是否存在
 	if _, err := os.Stat(dest); os.IsNotExist(err) {
-		t.Errorf("ZIP file not created: %v", err)
+		t.Errorf("File not created: %v", err)
 	}
 
 	// 清理测试数据
@@ -114,6 +114,44 @@ func TestDecompressGzip(t *testing.T) {
 	// 验证解压后的文件是否存在
 	if _, err := os.Stat(dest); os.IsNotExist(err) {
 		t.Errorf("Decompressed file not created: %v", err)
+	}
+
+	// 清理测试数据
+	//os.Remove(dest)
+}
+
+func TestCreateTarGzArchive(t *testing.T) {
+	src := "./testdata"               // 源文件夹
+	dest := "./testdata-targz.tar.gz" // 目标 GZIP 文件
+
+	// 创建 tar.gz 文件
+	err := CreateTarGzArchive(src, dest)
+	if err != nil {
+		t.Errorf("CreateTarGzArchive failed: %v", err)
+	}
+
+	// 验证目标文件是否存在
+	if _, err := os.Stat(dest); os.IsNotExist(err) {
+		t.Errorf("File not created: %v", err)
+	}
+
+	// 清理测试数据
+	//os.Remove(dest)
+}
+
+func TestDecompressTarGz(t *testing.T) {
+	src := "./testdata-targz.tar.gz" // 源文件夹
+	dest := "./testdata-targz"       // 目标 GZIP 文件
+
+	// 创建 tar.gz 文件
+	err := DecompressTarGz(src, dest)
+	if err != nil {
+		t.Errorf("CreateTarGzArchive failed: %v", err)
+	}
+
+	// 验证目标文件是否存在
+	if _, err := os.Stat(dest); os.IsNotExist(err) {
+		t.Errorf("File not created: %v", err)
 	}
 
 	// 清理测试数据
