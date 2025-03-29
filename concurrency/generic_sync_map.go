@@ -90,3 +90,13 @@ func (gm *GenericSyncMap[K, V]) Range(f func(key K, value V) bool) {
 		return f(k.(K), v.(V))
 	})
 }
+
+// ToMap 方法将 GenericSyncMap 转换为普通 map
+func (gm *GenericSyncMap[K, V]) ToMap() map[K]V {
+	simpleMap := make(map[K]V)
+	gm.data.Range(func(key, value any) bool {
+		simpleMap[key.(K)] = value.(V)
+		return true
+	})
+	return simpleMap
+}

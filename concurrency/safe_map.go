@@ -156,6 +156,23 @@ func (m *SafeMap[K, V]) ForEach(fn func(K, V) bool) {
 	}
 }
 
+// ToMap 将 SafeMap 转换为一个简单的 map
+func (m *SafeMap[K, V]) ToMap() map[K]V {
+	// 创建一个新的简单 map
+	simpleMap := make(map[K]V)
+
+	// 遍历所有分片
+	for shard := range m.maps {
+		m.locks[shard].RLock() // 加读锁，确保线程安全
+		for k, v := range m.maps[shard] {
+			simpleMap[k] = v // 合并到简单 map 中
+		}
+		m.locks[shard].RUnlock() // 释放读锁
+	}
+
+	return simpleMap
+}
+
 // getShard 根据键获取对应的分片
 func (m *SafeMap[K, V]) getShard(key K) uint64 {
 	hash := fnv32(fmt.Sprintf("%v", key))
