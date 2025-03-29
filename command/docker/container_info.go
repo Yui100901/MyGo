@@ -1,6 +1,7 @@
 package docker
 
 import (
+	"encoding/json"
 	"fmt"
 	"path/filepath"
 	"strings"
@@ -51,6 +52,20 @@ type ContainerInfo struct {
 	Config     Config     `json:"Config"`
 	HostConfig HostConfig `json:"HostConfig"`
 	Mounts     []Mount    `json:"Mounts"`
+}
+
+// GenerateContainerInfoList 获取docker容器信息信息并序列化为对象
+func GenerateContainerInfoList(names ...string) ([]ContainerInfo, error) {
+	data, err := ContainerInspect(names...)
+	if err != nil {
+		return nil, err
+	}
+	var containerInfoList []ContainerInfo
+	cleanData := strings.ReplaceAll(data, "\n", "")
+	if err := json.Unmarshal([]byte(cleanData), &containerInfoList); err != nil {
+		return nil, err
+	}
+	return containerInfoList, nil
 }
 
 func (ci *ContainerInfo) ParseContainerName() string {
