@@ -5,6 +5,7 @@ import (
 	"encoding/gob"
 	"encoding/json"
 	"encoding/xml"
+	"errors"
 	"fmt"
 	"gopkg.in/yaml.v2"
 	"reflect"
@@ -15,40 +16,85 @@ import (
 // @Date 2025/2/28 10 20
 //
 
-// CopyProperties 使用反射复制 src 的属性值到 dest，包括嵌套结构体
-func CopyProperties(src, dest interface{}) error {
-	srcVal := reflect.ValueOf(src)
-	destVal := reflect.ValueOf(dest)
+func ConvertStruct(src, dst interface{}) error {
+	srcValue := reflect.ValueOf(src)
+	dstValue := reflect.ValueOf(dst)
 
-	if srcVal.Kind() != reflect.Ptr || destVal.Kind() != reflect.Ptr {
-		return fmt.Errorf("both src and dest should be pointers")
+	// 检查输入是否为指针
+	if srcValue.Kind() != reflect.Ptr || dstValue.Kind() != reflect.Ptr {
+		return errors.New("both arguments must be pointers to structs")
 	}
 
-	srcElem := srcVal.Elem()
-	destElem := destVal.Elem()
+	srcElem := srcValue.Elem()
+	dstElem := dstValue.Elem()
 
-	if srcElem.Kind() != reflect.Struct || destElem.Kind() != reflect.Struct {
-		return fmt.Errorf("src and dest should point to structs")
+	// 确保元素都是结构体
+	if srcElem.Kind() != reflect.Struct || dstElem.Kind() != reflect.Struct {
+		return errors.New("arguments must be pointers to structs")
 	}
 
-	for i := 0; i < srcElem.NumField(); i++ {
+	srcType := srcElem.Type()
+	dstType := dstElem.Type()
+
+	// 构建目标结构体字段名到索引的映射
+	dstFields := make(map[string]int, dstType.NumField())
+	for i := 0; i < dstType.NumField(); i++ {
+		dstFields[dstType.Field(i).Name] = i
+	}
+
+	// 遍历源结构体的所有字段
+	for i := 0; i < srcType.NumField(); i++ {
 		srcField := srcElem.Field(i)
-		srcFieldName := srcElem.Type().Field(i).Name
+		srcFieldType := srcType.Field(i)
+		fieldName := srcFieldType.Name
 
-		destField := destElem.FieldByName(srcFieldName)
-		if !destField.IsValid() || !destField.CanSet() {
+		dstIndex, ok := dstFields[fieldName]
+		if !ok {
+			continue // 目标结构体无该字段
+		}
+
+		dstField := dstElem.Field(dstIndex)
+
+		// 检查目标字段是否可设置
+		if !dstField.CanSet() {
 			continue
 		}
 
-		// 如果字段是结构体，递归复制
-		if srcField.Kind() == reflect.Struct && destField.Kind() == reflect.Struct {
-			err := CopyProperties(srcField.Addr().Interface(), destField.Addr().Interface())
-			if err != nil {
+		// 检查类型是否匹配
+		if srcField.Type() != dstField.Type() {
+			continue
+		}
+
+		// 根据字段类型处理
+		switch srcField.Kind() {
+		case reflect.Struct:
+			// 递归处理结构体字段
+			if err := ConvertStruct(srcField.Addr().Interface(), dstField.Addr().Interface()); err != nil {
 				return err
 			}
-		} else if srcField.Type() == destField.Type() {
-			// 普通字段直接赋值
-			destField.Set(srcField)
+		case reflect.Ptr:
+			srcElemType := srcField.Type().Elem()
+			if srcElemType.Kind() == reflect.Struct {
+				// 处理结构体指针
+				if srcField.IsNil() {
+					dstField.Set(reflect.Zero(dstField.Type()))
+				} else {
+					if dstField.IsNil() {
+						// 初始化目标指针
+						dstField.Set(reflect.New(srcElemType))
+					}
+					// 递归处理指针指向的结构体
+					if err := ConvertStruct(srcField.Interface(), dstField.Interface()); err != nil {
+						return err
+					}
+				}
+			} else {
+				// 非结构体指针，直接复制值
+				dstField.Set(srcField)
+			}
+		default:
+			// 基础类型直接赋值
+			dstField.Set(srcField)
 		}
 	}
 
