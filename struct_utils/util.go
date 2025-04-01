@@ -16,6 +16,7 @@ import (
 // @Date 2025/2/28 10 20
 //
 
+// ConvertStruct 转换结构体
 func ConvertStruct(src, dst interface{}) error {
 	srcValue := reflect.ValueOf(src)
 	dstValue := reflect.ValueOf(dst)
@@ -60,41 +61,49 @@ func ConvertStruct(src, dst interface{}) error {
 			continue
 		}
 
-		// 检查类型是否匹配
-		if srcField.Type() != dstField.Type() {
-			continue
-		}
-
 		// 根据字段类型处理
 		switch srcField.Kind() {
 		case reflect.Struct:
-			// 递归处理结构体字段
-			if err := ConvertStruct(srcField.Addr().Interface(), dstField.Addr().Interface()); err != nil {
-				return err
+			// 目标字段也必须是结构体才能递归处理
+			if dstField.Kind() == reflect.Struct {
+				if err := ConvertStruct(srcField.Addr().Interface(), dstField.Addr().Interface()); err != nil {
+					return err
+				}
 			}
+
 		case reflect.Ptr:
+			// 处理指针类型
+			if dstField.Kind() != reflect.Ptr {
+				continue
+			}
+
 			srcElemType := srcField.Type().Elem()
-			if srcElemType.Kind() == reflect.Struct {
-				// 处理结构体指针
+			dstElemType := dstField.Type().Elem()
+
+			// 处理结构体指针的情况
+			if srcElemType.Kind() == reflect.Struct && dstElemType.Kind() == reflect.Struct {
 				if srcField.IsNil() {
 					dstField.Set(reflect.Zero(dstField.Type()))
 				} else {
 					if dstField.IsNil() {
-						// 初始化目标指针
-						dstField.Set(reflect.New(srcElemType))
+						// 创建目标类型的实例（注意这里使用目标类型）
+						dstField.Set(reflect.New(dstElemType))
 					}
 					// 递归处理指针指向的结构体
 					if err := ConvertStruct(srcField.Interface(), dstField.Interface()); err != nil {
 						return err
 					}
 				}
-			} else {
-				// 非结构体指针，直接复制值
+			} else if srcField.Type() == dstField.Type() {
+				// 非结构体指针但类型相同时直接复制
 				dstField.Set(srcField)
 			}
+
 		default:
-			// 基础类型直接赋值
-			dstField.Set(srcField)
+			// 基础类型需要严格匹配类型
+			if srcField.Type() == dstField.Type() {
+				dstField.Set(srcField)
+			}
 		}
 	}
 
