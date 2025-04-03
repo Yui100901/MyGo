@@ -16,98 +16,163 @@ import (
 // @Date 2025/2/28 10 20
 //
 
-// ConvertStruct 转换结构体
-func ConvertStruct(src, dst interface{}) error {
-	srcValue := reflect.ValueOf(src)
-	dstValue := reflect.ValueOf(dst)
+// ConvertStruct 递归地将源结构体（src）的字段值复制到目标结构体指针（dest）中。
+// src 支持结构体或结构体指针，dest 必须为结构体指针。
+func ConvertStruct(src, dest interface{}) error {
+	srcVal := reflect.ValueOf(src)
+	destVal := reflect.ValueOf(dest)
 
-	// 检查输入是否为指针
-	if srcValue.Kind() != reflect.Ptr || dstValue.Kind() != reflect.Ptr {
-		return errors.New("both arguments must be pointers to structs")
+	// 验证 dest 必须是非 nil 的结构体指针
+	if destVal.Kind() != reflect.Ptr || destVal.IsNil() {
+		return errors.New("dest must be a non-nil pointer")
+	}
+	if destVal.Elem().Kind() != reflect.Struct {
+		return errors.New("dest must be a pointer to struct")
+	}
+	destElem := destVal.Elem()
+
+	// 处理 src，允许结构体或结构体指针
+	var srcElem reflect.Value
+	if srcVal.Kind() == reflect.Ptr {
+		if srcVal.IsNil() {
+			return errors.New("src pointer is nil")
+		}
+		srcElem = srcVal.Elem()
+	} else {
+		srcElem = srcVal
+	}
+	if srcElem.Kind() != reflect.Struct {
+		return errors.New("src must be struct or struct pointer")
 	}
 
-	srcElem := srcValue.Elem()
-	dstElem := dstValue.Elem()
-
-	// 确保元素都是结构体
-	if srcElem.Kind() != reflect.Struct || dstElem.Kind() != reflect.Struct {
-		return errors.New("arguments must be pointers to structs")
+	// 构建目标结构体的导出字段名与字段索引映射
+	destType := destElem.Type()
+	destFields := make(map[string]int, destType.NumField())
+	for i := 0; i < destType.NumField(); i++ {
+		field := destType.Field(i)
+		if field.IsExported() {
+			destFields[field.Name] = i
+		}
 	}
 
+	// 遍历 src 的所有导出字段
 	srcType := srcElem.Type()
-	dstType := dstElem.Type()
-
-	// 构建目标结构体字段名到索引的映射
-	dstFields := make(map[string]int, dstType.NumField())
-	for i := 0; i < dstType.NumField(); i++ {
-		dstFields[dstType.Field(i).Name] = i
-	}
-
-	// 遍历源结构体的所有字段
 	for i := 0; i < srcType.NumField(); i++ {
-		srcField := srcElem.Field(i)
-		srcFieldType := srcType.Field(i)
-		fieldName := srcFieldType.Name
-
-		dstIndex, ok := dstFields[fieldName]
-		if !ok {
-			continue // 目标结构体无该字段
+		sf := srcType.Field(i)
+		if !sf.IsExported() {
+			continue
 		}
 
-		dstField := dstElem.Field(dstIndex)
+		fieldName := sf.Name
+		dstIdx, exists := destFields[fieldName]
+		if !exists {
+			continue
+		}
 
-		// 检查目标字段是否可设置
+		srcField := srcElem.Field(i)
+		dstField := destElem.Field(dstIdx)
 		if !dstField.CanSet() {
 			continue
 		}
 
-		// 根据字段类型处理
-		switch srcField.Kind() {
-		case reflect.Struct:
-			// 目标字段也必须是结构体才能递归处理
-			if dstField.Kind() == reflect.Struct {
-				if err := ConvertStruct(srcField.Addr().Interface(), dstField.Addr().Interface()); err != nil {
-					return err
+		// 若目标字段是指针且为 nil，则先初始化字段
+		if dstField.Kind() == reflect.Ptr && dstField.IsNil() {
+			dstField.Set(reflect.New(dstField.Type().Elem()))
+		}
+
+		// 深层复制字段
+		if err := copyField(srcField, dstField); err != nil {
+			return fmt.Errorf("field %s: %w", fieldName, err)
+		}
+	}
+	return nil
+}
+
+// copyField 处理字段的深层复制逻辑，包括指针与结构体之间的转换
+func copyField(src, dst reflect.Value) error {
+	// 如果 src 是指针且为 nil，则将目标指针置空
+	if src.Kind() == reflect.Ptr && src.IsNil() {
+		if dst.Kind() == reflect.Ptr {
+			dst.Set(reflect.Zero(dst.Type()))
+		}
+		return nil
+	}
+
+	// 类型完全匹配时直接赋值
+	if src.Type().AssignableTo(dst.Type()) {
+		dst.Set(src)
+		return nil
+	}
+
+	// 当目标为指针时处理
+	if dst.Kind() == reflect.Ptr {
+		dstElemType := dst.Type().Elem()
+
+		// 如果 src 也是指针，则先解引用
+		if src.Kind() == reflect.Ptr {
+			srcElem := src.Elem()
+			// 如果解引用后的类型可以直接赋值给目标元素
+			if srcElem.Type().AssignableTo(dstElemType) {
+				if dst.IsNil() {
+					dst.Set(reflect.New(dstElemType))
 				}
+				dst.Elem().Set(srcElem)
+				return nil
 			}
-
-		case reflect.Ptr:
-			// 处理指针类型
-			if dstField.Kind() != reflect.Ptr {
-				continue
-			}
-
-			srcElemType := srcField.Type().Elem()
-			dstElemType := dstField.Type().Elem()
-
-			// 处理结构体指针的情况
-			if srcElemType.Kind() == reflect.Struct && dstElemType.Kind() == reflect.Struct {
-				if srcField.IsNil() {
-					dstField.Set(reflect.Zero(dstField.Type()))
-				} else {
-					if dstField.IsNil() {
-						// 创建目标类型的实例（注意这里使用目标类型）
-						dstField.Set(reflect.New(dstElemType))
-					}
-					// 递归处理指针指向的结构体
-					if err := ConvertStruct(srcField.Interface(), dstField.Interface()); err != nil {
-						return err
-					}
+			// 如果两者均为结构体，则递归转换（指针结构体→指针结构体的场景也被包含）
+			if srcElem.Kind() == reflect.Struct && dstElemType.Kind() == reflect.Struct {
+				if dst.IsNil() {
+					dst.Set(reflect.New(dstElemType))
 				}
-			} else if srcField.Type() == dstField.Type() {
-				// 非结构体指针但类型相同时直接复制
-				dstField.Set(srcField)
+				return ConvertStruct(getPointer(srcElem), dst.Elem().Addr().Interface())
 			}
-
-		default:
-			// 基础类型需要严格匹配类型
-			if srcField.Type() == dstField.Type() {
-				dstField.Set(srcField)
+		} else { // src 不是指针
+			if src.Type().AssignableTo(dstElemType) {
+				if dst.IsNil() {
+					dst.Set(reflect.New(dstElemType))
+				}
+				dst.Elem().Set(src)
+				return nil
+			}
+			// 如 src 和目标指针指向的类型均是结构体，则递归转换
+			if src.Kind() == reflect.Struct && dstElemType.Kind() == reflect.Struct {
+				if dst.IsNil() {
+					dst.Set(reflect.New(dstElemType))
+				}
+				return ConvertStruct(getPointer(src), dst.Elem().Addr().Interface())
 			}
 		}
 	}
 
+	// 当 src 为指针而目标不是指针时，解引用后进行转换
+	if src.Kind() == reflect.Ptr {
+		srcElem := src.Elem()
+		if srcElem.Type().AssignableTo(dst.Type()) {
+			dst.Set(srcElem)
+			return nil
+		}
+		if srcElem.Kind() == reflect.Struct && dst.Kind() == reflect.Struct {
+			return ConvertStruct(getPointer(srcElem), dst.Addr().Interface())
+		}
+	}
+
+	// 直接结构体到结构体转换
+	if src.Kind() == reflect.Struct && dst.Kind() == reflect.Struct {
+		return ConvertStruct(getPointer(src), dst.Addr().Interface())
+	}
+
+	// 类型不兼容，忽略该字段
 	return nil
+}
+
+// getPointer 确保获取传入值的可寻址指针形式，解决不可寻址的问题
+func getPointer(v reflect.Value) interface{} {
+	if v.CanAddr() {
+		return v.Addr().Interface()
+	}
+	cp := reflect.New(v.Type()).Elem()
+	cp.Set(v)
+	return cp.Addr().Interface()
 }
 
 // StructToMap 将结构体转换为 map[string]any

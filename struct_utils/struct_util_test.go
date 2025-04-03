@@ -1,10 +1,15 @@
 package struct_utils
 
-import "testing"
+import (
+	"fmt"
+	"log"
+	"reflect"
+	"testing"
+)
 
 //
 // @Author yfy2001
-// @Date 2025/3/31 15 09
+// @ 2025/3/31 15 09
 //
 
 // 基本结构体（用于基本类型字段测试）
@@ -230,4 +235,141 @@ func TestConvertStruct(t *testing.T) {
 		}
 		t.Logf("After conversion: src: %d, dst: %d", i, j)
 	})
+}
+
+type Source struct {
+	SameNested             Nested1
+	Nested1ToNested2       Nested1
+	Nested1PtrToNested2    *Nested1
+	Nested1ToNested2Ptr    Nested1
+	Nested1PtrToNested2Ptr *Nested1
+}
+
+type Destination struct {
+	SameNested             Nested1
+	Nested1ToNested2       Nested2
+	Nested1PtrToNested2    Nested2
+	Nested1ToNested2Ptr    *Nested2
+	Nested1PtrToNested2Ptr *Nested2
+}
+
+type Nested1 struct {
+	Field1 string
+	Field2 int
+	Field3 float32
+	Field4 uint
+
+	Field5 string
+	Field6 float64
+	field7 bool
+	field8 string
+	extra1 string
+}
+
+type Nested2 struct {
+	Field1 string
+	Field2 int
+	Field3 float32
+	Field4 uint
+	Field5 int64
+	Field6 string
+	field7 bool
+	field8 string
+}
+
+func TestConvert(t *testing.T) {
+	src := Source{
+		SameNested: Nested1{
+			Field1: "field1",
+			Field2: 2,
+			Field3: 3,
+			Field4: 4,
+			Field5: "field5",
+			Field6: 6.0,
+			field7: true,
+			field8: "field8",
+			extra1: "extra1",
+		},
+		Nested1ToNested2: Nested1{
+			Field1: "field1",
+			Field2: 2,
+			Field3: 3,
+			Field4: 4,
+			Field5: "field5",
+			Field6: 6.0,
+			field7: true,
+			field8: "field8",
+			extra1: "extra1",
+		},
+		Nested1PtrToNested2: &Nested1{
+			Field1: "field1",
+			Field2: 2,
+			Field3: 3,
+			Field4: 4,
+			Field5: "field5",
+			Field6: 6.0,
+			field7: true,
+			field8: "field8",
+			extra1: "extra1",
+		},
+		Nested1ToNested2Ptr: Nested1{
+			Field1: "field1",
+			Field2: 2,
+			Field3: 3,
+			Field4: 4,
+			Field5: "field5",
+			Field6: 6.0,
+			field7: true,
+			field8: "field8",
+			extra1: "extra1",
+		},
+		Nested1PtrToNested2Ptr: &Nested1{
+			Field1: "field1",
+			Field2: 2,
+			Field3: 3,
+			Field4: 4,
+			Field5: "field5",
+			Field6: 6.0,
+			field7: true,
+			field8: "field8",
+			extra1: "extra1",
+		},
+	}
+	var dest *Destination
+	dest = &Destination{}
+	checkField := "Nested1PtrToNested2Ptr"
+	printSpecificField(src, checkField)
+	printSpecificField(dest, checkField)
+	err := ConvertStruct(src, dest)
+	if err != nil {
+		log.Fatal(err)
+		return
+	}
+	printSpecificField(dest, checkField)
+
+	t.Logf("比较结果%+v", reflect.DeepEqual(src, dest))
+}
+
+func printSpecificField(v interface{}, fieldName string) {
+	val := reflect.ValueOf(v)
+
+	// 如果 v 是指针，解引用以获取指向的实际值
+	if val.Kind() == reflect.Ptr {
+		val = val.Elem()
+	}
+
+	typ := val.Type()
+
+	// 确保解析后的值是结构体
+	if val.Kind() == reflect.Struct {
+		field, exists := typ.FieldByName(fieldName)
+		if exists {
+			value := val.FieldByName(fieldName)
+			fmt.Printf("Field Name: %s, Field Value: %+v\n", field.Name, value.Interface())
+		} else {
+			fmt.Printf("Field %s does not exist in the struct\n", fieldName)
+		}
+	} else {
+		fmt.Println("Provided value is not a struct or pointer to a struct")
+	}
 }
