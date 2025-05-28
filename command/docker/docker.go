@@ -88,7 +88,7 @@ func ImagePrune() error {
 }
 
 // DefaultRun 默认启动Docker容器
-func DefaultRun(name string, ports ...string) error {
+func DefaultRun(name string, ports []string, envs map[string]string) error {
 	log_utils.Info.Println("默认启动", name)
 	args := []string{
 		"run",
@@ -99,19 +99,22 @@ func DefaultRun(name string, ports ...string) error {
 	for _, p := range ports {
 		args = append(args, "-p", p+":"+p)
 	}
+	for k, v := range envs {
+		args = append(args, "-p", k+"="+v)
+	}
 	args = append(args, name+":latest")
 	return command.RunCommand("docker", args...)
 }
 
 // ContainerRerun 重新创建Docker容器
-func ContainerRerun(name string, ports ...string) error {
+func ContainerRerun(name string, ports []string, envs map[string]string) error {
 	if err := ContainerStop(name); err != nil {
 
 	}
 	if err := ContainerRemove(name); err != nil {
 
 	}
-	if err := DefaultRun(name, ports...); err != nil {
+	if err := DefaultRun(name, ports, envs); err != nil {
 
 	}
 	return nil
