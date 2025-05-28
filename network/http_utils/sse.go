@@ -25,7 +25,7 @@ func (sm *SSEMessage) Encode() string {
 
 	// 写入注释（可选）
 	if sm.Comment != "" {
-		fmt.Fprintf(&buf, ":%s\n", sm.Comment)
+		fmt.Fprintf(&buf, ": %s\n", sm.Comment)
 	}
 
 	// 写入事件类型（可选）
