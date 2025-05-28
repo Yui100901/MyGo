@@ -100,7 +100,7 @@ func DefaultRun(name string, ports []string, envs map[string]string) error {
 		args = append(args, "-p", p+":"+p)
 	}
 	for k, v := range envs {
-		args = append(args, "-p", k+"="+v)
+		args = append(args, "-e", k+"="+v)
 	}
 	args = append(args, name+":latest")
 	return command.RunCommand("docker", args...)
