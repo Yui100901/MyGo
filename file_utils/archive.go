@@ -392,10 +392,10 @@ func CreateTarGzArchive(src, dest string) error {
 	})
 }
 
-func DecompressTarGz(gzFile, dest string) error {
+func DecompressTarGz(src, dest string) error {
 	// 先解压gzip
 	tmpTar := filepath.Join(os.TempDir(), "temp.tar")
-	if err := DecompressGzip(gzFile, tmpTar); err != nil {
+	if err := DecompressGzip(src, tmpTar); err != nil {
 		return err
 	}
 	defer os.Remove(tmpTar) // 清理临时文件
