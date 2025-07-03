@@ -104,8 +104,8 @@ func (c *MQTTClient) Publish(r *MQTTPublishRequest) ([]byte, error) {
 	}
 	res := c.client.Publish(r.Topic, r.Qos, r.Retained, r.Payload)
 	res.Wait()
-	log_utils.Info.Println(c.ClientId, "Published a message", "Topic", r.Topic, r.Payload)
-	return []byte(fmt.Sprintf(c.ClientId, "Published a message", "Topic", r.Topic, r.Payload)), nil
+	log_utils.Info.Println(c.ClientId, "Published a message", "Topic", r.Topic)
+	return []byte(fmt.Sprintf(c.ClientId, "Published a message", "Topic", r.Topic)), nil
 }
 
 func (c *MQTTClient) OnConnectHandler(client mqtt.Client) {
