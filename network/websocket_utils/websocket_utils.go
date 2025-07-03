@@ -5,80 +5,111 @@ import (
 	"github.com/gorilla/websocket"
 	"net/http"
 	"sync"
+	"time"
 )
 
-//
-// @Author yfy2001
-// @Date 2025/1/16 09 56
-//
-
-// WSServer 是一个全局的 WebSocket 升级器
+// WSServer 全局WebSocket升级器
 var WSServer = websocket.Upgrader{
 	CheckOrigin: func(r *http.Request) bool {
-		// 验证
+		// 生产环境应替换为实际源检查逻辑
 		return true
 	},
 }
 
-// WebSocket 表示一个 WebSocket 连接
+// WebSocket 封装WebSocket连接
 type WebSocket struct {
-	Conn *websocket.Conn // 底层 WebSocket 连接对象
-	Done chan struct{}
-	mu   sync.Mutex
+	conn      *websocket.Conn
+	closeOnce sync.Once     // 确保关闭操作幂等性
+	done      chan struct{} // 连接关闭通知通道
+	writeMu   sync.Mutex    // 写操作互斥锁
 }
 
-// NewWebSocketByUpgrade 通过 HTTP 请求升级为 WebSocket
+// NewWebSocketByUpgrade 升级HTTP连接为WebSocket
 func NewWebSocketByUpgrade(w http.ResponseWriter, r *http.Request, responseHeader http.Header) (*WebSocket, error) {
 	conn, err := WSServer.Upgrade(w, r, responseHeader)
 	if err != nil {
 		return nil, err
 	}
-	return &WebSocket{
-		Conn: conn,
-		Done: make(chan struct{}),
-		mu:   sync.Mutex{},
-	}, nil
+	return newWebSocket(conn), nil
 }
 
-// NewWebSocketByDial 通过 WebSocket 地址进行连接
+// NewWebSocketByDial 主动建立WebSocket连接
 func NewWebSocketByDial(url string, requestHeader http.Header) (*WebSocket, error) {
 	conn, _, err := websocket.DefaultDialer.Dial(url, requestHeader)
 	if err != nil {
 		return nil, err
 	}
-	return &WebSocket{
-		Conn: conn,
-		Done: make(chan struct{}),
-		mu:   sync.Mutex{},
-	}, nil
+	return newWebSocket(conn), nil
 }
 
-// OnMessage 注册一个处理消息的回调函数
-func (ws *WebSocket) OnMessage(handleFunc func([]byte)) {
-	defer close(ws.Done)
-	for {
-		_, message, err := ws.Conn.ReadMessage()
-		if err != nil {
-			log_utils.Error.Println("WebSocket Read ERROR:", err)
-			return
-		}
-		if handleFunc != nil {
-			handleFunc(message)
-		}
-		log_utils.Info.Printf("WebSocket Receive: %s", message)
+// newWebSocket 内部构造函数
+func newWebSocket(conn *websocket.Conn) *WebSocket {
+	return &WebSocket{
+		conn: conn,
+		done: make(chan struct{}),
 	}
 }
 
-// SendMessage 发送一条消息
-func (ws *WebSocket) SendMessage(messageType int, data func() []byte) error {
-	ws.mu.Lock()
-	defer ws.mu.Unlock()
-	return ws.Conn.WriteMessage(messageType, data())
+// OnMessage 持续处理消息（阻塞式）
+func (ws *WebSocket) OnMessage(handleFunc func(messageType int, payload []byte)) {
+	defer ws.safeClose() // 确保退出时关闭资源
+
+	for {
+		select {
+		case <-ws.done:
+			return // 已关闭连接
+		default:
+			msgType, message, err := ws.conn.ReadMessage()
+			if err != nil {
+				if websocket.IsUnexpectedCloseError(err, websocket.CloseNormalClosure) {
+					log_utils.Error.Printf("WebSocket read error: %v", err)
+				}
+				return
+			}
+			log_utils.Info.Printf("WebSocket Receive (%d): %s", msgType, message)
+
+			if handleFunc != nil {
+				handleFunc(msgType, message)
+			}
+		}
+	}
 }
 
-// Close 关闭 WebSocket 连接
+// SendMessage 安全发送消息
+func (ws *WebSocket) SendMessage(messageType int, payload []byte) error {
+	ws.writeMu.Lock()
+	defer ws.writeMu.Unlock()
+
+	select {
+	case <-ws.done:
+		return websocket.ErrCloseSent // 连接已关闭
+	default:
+		return ws.conn.WriteMessage(messageType, payload)
+	}
+}
+
+// Close 安全关闭连接
 func (ws *WebSocket) Close() {
-	ws.mu.Lock()
-	defer ws.mu.Unlock()
-	ws.Conn.Close()
+	ws.safeClose()
+}
+
+// safeClose 内部关闭方法（幂等）
+func (ws *WebSocket) safeClose() {
+	ws.closeOnce.Do(func() {
+		close(ws.done) // 通知所有协程
+
+		// 发送标准关闭帧
+		_ = ws.conn.WriteControl(
+			websocket.CloseMessage,
+			websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""),
+			time.Now().Add(3*time.Second),
+		)
+
+		ws.conn.Close() // 关闭底层连接
+	})
+}
+
+// Done 获取关闭通知通道
+func (ws *WebSocket) Done() <-chan struct{} {
+	return ws.done
 }
