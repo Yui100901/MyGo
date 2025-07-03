@@ -66,8 +66,6 @@ func (ws *WebSocket) OnMessage(handleFunc func(messageType int, payload []byte))
 				}
 				return
 			}
-			log_utils.Info.Printf("WebSocket Receive (%d): %s", msgType, message)
-
 			if handleFunc != nil {
 				handleFunc(msgType, message)
 			}
