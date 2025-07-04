@@ -1,7 +1,7 @@
 package websocket_utils
 
 import (
-	"github.com/Yui100901/MyGo/log_utils"
+	"fmt"
 	"github.com/gorilla/websocket"
 	"net/http"
 	"sync"
@@ -28,7 +28,7 @@ type WebSocket struct {
 func NewWebSocketByUpgrade(w http.ResponseWriter, r *http.Request, responseHeader http.Header) (*WebSocket, error) {
 	conn, err := WSServer.Upgrade(w, r, responseHeader)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("ws upgrade failed: %w", err)
 	}
 	return newWebSocket(conn), nil
 }
@@ -37,7 +37,7 @@ func NewWebSocketByUpgrade(w http.ResponseWriter, r *http.Request, responseHeade
 func NewWebSocketByDial(url string, requestHeader http.Header) (*WebSocket, error) {
 	conn, _, err := websocket.DefaultDialer.Dial(url, requestHeader)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("ws dial failed: %w", err)
 	}
 	return newWebSocket(conn), nil
 }
@@ -51,23 +51,23 @@ func newWebSocket(conn *websocket.Conn) *WebSocket {
 }
 
 // OnMessage 持续处理消息（阻塞式）
-func (ws *WebSocket) OnMessage(handleFunc func(messageType int, payload []byte)) {
+func (ws *WebSocket) OnMessage(handleFunc func(messageType int, payload []byte)) error {
 	defer ws.safeClose() // 确保退出时关闭资源
 
 	for {
 		select {
 		case <-ws.done:
-			return // 已关闭连接
+			return nil // 已关闭连接
 		default:
 			msgType, message, err := ws.conn.ReadMessage()
 			if err != nil {
 				if websocket.IsUnexpectedCloseError(err, websocket.CloseNormalClosure) {
-					log_utils.Error.Printf("WebSocket read error: %v", err)
+					return fmt.Errorf("WebSocket read error: %v", err)
 				}
-				return
+				return nil
 			}
 			if handleFunc != nil {
-				handleFunc(msgType, message)
+				go handleFunc(msgType, message)
 			}
 		}
 	}
