@@ -1,4 +1,4 @@
-package http_utils
+package websocket_utils
 
 import (
 	"errors"
