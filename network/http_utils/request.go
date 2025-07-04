@@ -19,7 +19,7 @@ import (
 // HTTPRequest 包含apiUrl和headers
 type HTTPRequest struct {
 	Method string
-	APIUrl string
+	Url    string
 	Query  map[string]string
 	Header map[string]string
 	Body   any
@@ -28,7 +28,7 @@ type HTTPRequest struct {
 func NewHTTPRequest(method, apiUrl string, query, header map[string]string, body any) *HTTPRequest {
 	return &HTTPRequest{
 		Method: method,
-		APIUrl: apiUrl,
+		Url:    apiUrl,
 		Query:  query,
 		Header: header,
 		Body:   body,
@@ -37,7 +37,7 @@ func NewHTTPRequest(method, apiUrl string, query, header map[string]string, body
 
 func (hr *HTTPRequest) generateRequest() (*http.Request, error) {
 	req, _ := http.NewRequest(hr.Method, "", nil)
-	err := setUrlWithQuery(req, hr.APIUrl, hr.Query)
+	err := setUrlWithQuery(req, hr.Url, hr.Query)
 	if err != nil {
 		return nil, err
 	}
