@@ -6,6 +6,7 @@ import (
 	"github.com/gorilla/websocket"
 	"log"
 	"net/http"
+	"os"
 	"sync"
 	"time"
 )
@@ -57,7 +58,7 @@ func newWebSocket(conn *websocket.Conn) *WebSocket {
 		conn:        conn,
 		done:        make(chan struct{}),
 		readTimeout: 0, // 默认无超时
-		logger:      log.Default(),
+		logger:      log.New(os.Stderr, "[WS] ", log.LstdFlags),
 	}
 }
 
