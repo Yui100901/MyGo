@@ -1,6 +1,7 @@
 package websocket_utils
 
 import (
+	"errors"
 	"fmt"
 	"github.com/gorilla/websocket"
 	"net/http"
@@ -8,23 +9,27 @@ import (
 	"time"
 )
 
-// WSServer 全局WebSocket升级器
+// 生产环境应配置严格的源检查
 var WSServer = websocket.Upgrader{
 	CheckOrigin: func(r *http.Request) bool {
-		// 生产环境应替换为实际源检查逻辑
 		return true
 	},
 }
 
-// WebSocket 封装WebSocket连接
+const (
+	writeTimeout = 3 * time.Second
+	closeTimeout = 3 * time.Second
+)
+
 type WebSocket struct {
-	conn      *websocket.Conn
-	closeOnce sync.Once     // 确保关闭操作幂等性
-	done      chan struct{} // 连接关闭通知通道
-	writeMu   sync.Mutex    // 写操作互斥锁
+	conn        *websocket.Conn
+	closeOnce   sync.Once
+	done        chan struct{}
+	writeMu     sync.Mutex
+	readTimeout time.Duration // 可配置的读取超时
 }
 
-// NewWebSocketByUpgrade 升级HTTP连接为WebSocket
+// NewWebSocketByUpgrade 升级HTTP连接
 func NewWebSocketByUpgrade(w http.ResponseWriter, r *http.Request, responseHeader http.Header) (*WebSocket, error) {
 	conn, err := WSServer.Upgrade(w, r, responseHeader)
 	if err != nil {
@@ -33,55 +38,71 @@ func NewWebSocketByUpgrade(w http.ResponseWriter, r *http.Request, responseHeade
 	return newWebSocket(conn), nil
 }
 
-// NewWebSocketByDial 主动建立WebSocket连接
+// NewWebSocketByDial 主动建立连接
 func NewWebSocketByDial(url string, requestHeader http.Header) (*WebSocket, error) {
-	conn, _, err := websocket.DefaultDialer.Dial(url, requestHeader)
+	dialer := websocket.DefaultDialer
+	dialer.HandshakeTimeout = 10 * time.Second // 添加握手超时
+	conn, _, err := dialer.Dial(url, requestHeader)
 	if err != nil {
 		return nil, fmt.Errorf("ws dial failed: %w", err)
 	}
 	return newWebSocket(conn), nil
 }
 
-// newWebSocket 内部构造函数
 func newWebSocket(conn *websocket.Conn) *WebSocket {
 	return &WebSocket{
-		conn: conn,
-		done: make(chan struct{}),
+		conn:        conn,
+		done:        make(chan struct{}),
+		readTimeout: 0, // 默认无超时
 	}
 }
 
-// OnMessage 持续处理消息（阻塞式）
+// SetReadTimeout 设置读取超时(可选)
+func (ws *WebSocket) SetReadTimeout(timeout time.Duration) {
+	ws.readTimeout = timeout
+}
+
+// OnMessage 处理消息(支持优雅退出)
 func (ws *WebSocket) OnMessage(handleFunc func(messageType int, payload []byte)) error {
-	defer ws.safeClose() // 确保退出时关闭资源
+	if handleFunc == nil {
+		return errors.New("handle function is nil")
+	}
+
+	defer ws.safeClose() // 确保退出时清理资源
 
 	for {
 		select {
 		case <-ws.done:
-			return nil // 已关闭连接
+			return nil
 		default:
+			if ws.readTimeout > 0 {
+				_ = ws.conn.SetReadDeadline(time.Now().Add(ws.readTimeout))
+			}
+
 			msgType, message, err := ws.conn.ReadMessage()
 			if err != nil {
-				if websocket.IsUnexpectedCloseError(err, websocket.CloseNormalClosure) {
-					return fmt.Errorf("WebSocket read error: %v", err)
+				if websocket.IsCloseError(err,
+					websocket.CloseNormalClosure,
+					websocket.CloseGoingAway) {
+					return nil
 				}
-				return nil
+				return fmt.Errorf("read error: %w", err)
 			}
-			if handleFunc != nil {
-				go handleFunc(msgType, message)
-			}
+			handleFunc(msgType, message)
 		}
 	}
 }
 
-// SendMessage 安全发送消息
+// SendMessage 线程安全的消息发送
 func (ws *WebSocket) SendMessage(messageType int, payload []byte) error {
 	ws.writeMu.Lock()
 	defer ws.writeMu.Unlock()
 
 	select {
 	case <-ws.done:
-		return websocket.ErrCloseSent // 连接已关闭
+		return websocket.ErrCloseSent
 	default:
+		_ = ws.conn.SetWriteDeadline(time.Now().Add(writeTimeout))
 		return ws.conn.WriteMessage(messageType, payload)
 	}
 }
@@ -91,23 +112,28 @@ func (ws *WebSocket) Close() {
 	ws.safeClose()
 }
 
-// safeClose 内部关闭方法（幂等）
 func (ws *WebSocket) safeClose() {
 	ws.closeOnce.Do(func() {
-		close(ws.done) // 通知所有协程
+		close(ws.done) // 通知所有消费者
 
-		// 发送标准关闭帧
+		// 发送关闭帧(忽略错误)
 		_ = ws.conn.WriteControl(
 			websocket.CloseMessage,
 			websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""),
-			time.Now().Add(3*time.Second),
+			time.Now().Add(closeTimeout),
 		)
 
-		ws.conn.Close() // 关闭底层连接
+		// 安全关闭底层连接
+		_ = ws.conn.Close()
 	})
 }
 
-// Done 获取关闭通知通道
+// Done 获取关闭信号
 func (ws *WebSocket) Done() <-chan struct{} {
 	return ws.done
+}
+
+// RemoteAddr 获取对端地址
+func (ws *WebSocket) RemoteAddr() string {
+	return ws.conn.RemoteAddr().String()
 }
