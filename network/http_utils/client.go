@@ -1,170 +1,190 @@
 package http_utils
 
 import (
-	"crypto/tls"
 	"errors"
 	"fmt"
-	"io"
+	"github.com/gorilla/websocket"
 	"log"
 	"net/http"
-	"net/http/cookiejar"
-	"net/url"
-	"os"
+	"sync"
 	"time"
 )
 
+// WSServer 全局WebSocket升级器
+var WSServer = websocket.Upgrader{
+	CheckOrigin: func(r *http.Request) bool {
+		// 生产环境应替换为实际源检查逻辑
+		return true
+	},
+}
+
 const (
-	defaultTimeout = 30 * time.Second
+	writeTimeout = 3 * time.Second
+	closeTimeout = 3 * time.Second
 )
 
-// HTTPClient HTTP客户端封装
-type HTTPClient struct {
-	Client *http.Client
-	Logger *log.Logger // 日志记录器
+type WebSocket struct {
+	conn        *websocket.Conn
+	closeOnce   sync.Once
+	done        chan struct{}
+	writeMu     sync.Mutex
+	readTimeout time.Duration // 可配置的读取超时
+	logger      *log.Logger   // 日志记录器
 }
 
-// NewHTTPClient 创建新的HTTP客户端
-func NewHTTPClient() *HTTPClient {
-	// 创建带 cookie 支持的客户端
-	jar, _ := cookiejar.New(nil)
-
-	return &HTTPClient{
-		Client: &http.Client{
-			Timeout: defaultTimeout,
-			Jar:     jar,
-		},
-		Logger: log.New(os.Stderr, "[HTTP] ", log.LstdFlags),
-	}
-}
-
-// SetProxy 设置代理
-func (c *HTTPClient) SetProxy(proxyURL string) error {
-	parsedURL, err := url.Parse(proxyURL)
+// NewWebSocketByUpgrade 升级HTTP连接
+func NewWebSocketByUpgrade(w http.ResponseWriter, r *http.Request, responseHeader http.Header) (*WebSocket, error) {
+	conn, err := WSServer.Upgrade(w, r, responseHeader)
 	if err != nil {
-		return fmt.Errorf("invalid proxy URL: %w", err)
+		return nil, fmt.Errorf("ws upgrade failed: %w", err)
+	}
+	return newWebSocket(conn), nil
+}
+
+// NewWebSocketByDial 主动建立连接
+func NewWebSocketByDial(url string, requestHeader http.Header) (*WebSocket, error) {
+	dialer := websocket.DefaultDialer
+	dialer.HandshakeTimeout = 10 * time.Second // 添加握手超时
+	conn, _, err := dialer.Dial(url, requestHeader)
+	if err != nil {
+		return nil, fmt.Errorf("ws dial failed: %w", err)
+	}
+	return newWebSocket(conn), nil
+}
+
+func newWebSocket(conn *websocket.Conn) *WebSocket {
+	return &WebSocket{
+		conn:        conn,
+		done:        make(chan struct{}),
+		readTimeout: 0, // 默认无超时
+		logger:      log.Default(),
+	}
+}
+
+// SetLogger 设置自定义日志记录器
+func (ws *WebSocket) SetLogger(logger *log.Logger) {
+	ws.logger = logger
+}
+
+// SetReadTimeout 设置读取超时
+func (ws *WebSocket) SetReadTimeout(timeout time.Duration) {
+	ws.readTimeout = timeout
+}
+
+// OnMessage 持续处理消息
+func (ws *WebSocket) OnMessage(handleFunc func(messageType int, payload []byte)) error {
+	if handleFunc == nil {
+		return errors.New("handle function is nil")
 	}
 
-	if c.Client.Transport == nil {
-		c.Client.Transport = &http.Transport{
-			Proxy: http.ProxyURL(parsedURL),
-		}
-	} else {
-		if transport, ok := c.Client.Transport.(*http.Transport); ok {
-			transport.Proxy = http.ProxyURL(parsedURL)
-		} else {
-			return errors.New("cannot set proxy on existing transport")
-		}
-	}
-	return nil
-}
+	defer ws.safeClose() // 确保退出时清理资源
 
-// SetTimeout 设置超时时间
-func (c *HTTPClient) SetTimeout(timeout time.Duration) {
-	c.Client.Timeout = timeout
-}
+	ws.logger.Printf("开始接收消息 (Remote: %s)", ws.RemoteAddr())
 
-// SetTransport 设置自定义传输层
-func (c *HTTPClient) SetTransport(transport *http.Transport) {
-	c.Client.Transport = transport
-}
-
-// SetInsecureSkipVerify 设置跳过TLS证书验证
-func (c *HTTPClient) SetInsecureSkipVerify(skip bool) {
-	if c.Client.Transport == nil {
-		c.Client.Transport = &http.Transport{
-			TLSClientConfig: &tls.Config{InsecureSkipVerify: skip},
-		}
-	} else {
-		if transport, ok := c.Client.Transport.(*http.Transport); ok {
-			if transport.TLSClientConfig == nil {
-				transport.TLSClientConfig = &tls.Config{InsecureSkipVerify: skip}
-			} else {
-				transport.TLSClientConfig.InsecureSkipVerify = skip
+	for {
+		select {
+		case <-ws.done:
+			ws.logger.Printf("连接已关闭，停止接收消息 (Remote: %s)", ws.RemoteAddr())
+			return nil
+		default:
+			if ws.readTimeout > 0 {
+				_ = ws.conn.SetReadDeadline(time.Now().Add(ws.readTimeout))
 			}
+
+			msgType, message, err := ws.conn.ReadMessage()
+			if err != nil {
+				if websocket.IsCloseError(err, websocket.CloseNormalClosure, websocket.CloseGoingAway) {
+					ws.logger.Printf("连接正常关闭 (Remote: %s)", ws.RemoteAddr())
+					return nil
+				}
+				ws.logger.Printf("读取消息错误: %v (Remote: %s)", err, ws.RemoteAddr())
+				return fmt.Errorf("read error: %w", err)
+			}
+
+			ws.logger.Printf("收到消息 (类型: %d, 长度: %d字节, Remote: %s)",
+				msgType, len(message), ws.RemoteAddr())
+
+			handleFunc(msgType, message)
 		}
 	}
 }
 
-// SetLogger 设置自定义日志器
-func (c *HTTPClient) SetLogger(logger *log.Logger) {
-	c.Logger = logger
+// SendMessage 线程安全的消息发送
+func (ws *WebSocket) SendMessage(messageType int, payload []byte) error {
+	ws.writeMu.Lock()
+	defer ws.writeMu.Unlock()
+
+	select {
+	case <-ws.done:
+		ws.logger.Printf("尝试发送消息但连接已关闭 (Remote: %s)", ws.RemoteAddr())
+		return websocket.ErrCloseSent
+	default:
+		_ = ws.conn.SetWriteDeadline(time.Now().Add(writeTimeout))
+		err := ws.conn.WriteMessage(messageType, payload)
+		if err != nil {
+			ws.logger.Printf("发送消息失败: %v (Remote: %s)", err, ws.RemoteAddr())
+			return fmt.Errorf("write error: %w", err)
+		}
+
+		ws.logger.Printf("消息发送成功 (类型: %d, 长度: %d字节, Remote: %s)",
+			messageType, len(payload), ws.RemoteAddr())
+		return nil
+	}
 }
 
-// ExecuteRequest 执行HTTP请求
-func (c *HTTPClient) ExecuteRequest(r *HTTPRequest) (*http.Response, error) {
-	req, err := r.generateRequest()
-	if err != nil {
-		return nil, fmt.Errorf("生成请求失败: %w", err)
-	}
-
-	// 记录请求开始时间
-	start := time.Now()
-	c.Logger.Printf("开始请求: %s %s", req.Method, req.URL)
-
-	resp, err := c.Client.Do(req)
-	if err != nil {
-		c.Logger.Printf("请求失败: %s %s | 错误: %v | 耗时: %v",
-			req.Method, req.URL, err, time.Since(start))
-		return nil, fmt.Errorf("发送请求失败: %w", err)
-	}
-
-	c.Logger.Printf("请求完成: %s %s | 状态: %d | 耗时: %v",
-		req.Method, req.URL, resp.StatusCode, time.Since(start))
-
-	return resp, nil
+// Close 安全关闭连接
+func (ws *WebSocket) Close() {
+	ws.logger.Printf("关闭连接 (Remote: %s)", ws.RemoteAddr())
+	ws.safeClose()
 }
 
-// GetResponseData 发送HTTP请求并返回响应数据
-func (c *HTTPClient) GetResponseData(r *HTTPRequest) ([]byte, error) {
-	resp, err := c.ExecuteRequest(r)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
+func (ws *WebSocket) safeClose() {
+	ws.closeOnce.Do(func() {
+		close(ws.done) // 通知所有消费者
 
-	// 检查状态码
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil, fmt.Errorf("非成功状态码: %d %s", resp.StatusCode, resp.Status)
-	}
+		// 发送关闭帧
+		err := ws.conn.WriteControl(
+			websocket.CloseMessage,
+			websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""),
+			time.Now().Add(closeTimeout),
+		)
+		if err != nil {
+			ws.logger.Printf("发送关闭帧失败: %v (Remote: %s)", err, ws.RemoteAddr())
+		} else {
+			ws.logger.Printf("关闭帧已发送 (Remote: %s)", ws.RemoteAddr())
+		}
 
-	// 读取响应数据
-	respData, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("读取响应错误: %w", err)
-	}
-
-	c.Logger.Printf("读取响应数据: %s %s | 大小: %d bytes",
-		r.Method, r.Url, len(respData))
-
-	return respData, nil
+		// 安全关闭底层连接
+		err = ws.conn.Close()
+		if err != nil {
+			ws.logger.Printf("关闭底层连接失败: %v (Remote: %s)", err, ws.RemoteAddr())
+		} else {
+			ws.logger.Printf("连接已完全关闭 (Remote: %s)", ws.RemoteAddr())
+		}
+	})
 }
 
-// SaveResponseToFile 发送HTTP请求并将响应保存到文件
-func (c *HTTPClient) SaveResponseToFile(r *HTTPRequest, filepath string) error {
-	resp, err := c.ExecuteRequest(r)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
+// Done 获取关闭信号通道
+func (ws *WebSocket) Done() <-chan struct{} {
+	return ws.done
+}
 
-	// 检查状态码
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return fmt.Errorf("非成功状态码: %d %s", resp.StatusCode, resp.Status)
-	}
+// RemoteAddr 获取对端地址
+func (ws *WebSocket) RemoteAddr() string {
+	return ws.conn.RemoteAddr().String()
+}
 
-	// 创建目标文件
-	file, err := os.Create(filepath)
-	if err != nil {
-		return fmt.Errorf("创建文件失败: %w", err)
-	}
-	defer file.Close()
+// LocalAddr 获取本地地址
+func (ws *WebSocket) LocalAddr() string {
+	return ws.conn.LocalAddr().String()
+}
 
-	// 写入数据
-	size, err := io.Copy(file, resp.Body)
-	if err != nil {
-		return fmt.Errorf("写入文件失败: %w", err)
+// IsClosed 检查连接是否已关闭
+func (ws *WebSocket) IsClosed() bool {
+	select {
+	case <-ws.done:
+		return true
+	default:
+		return false
 	}
-
-	c.Logger.Printf("文件保存成功: %s | 大小: %d bytes", filepath, size)
-	return nil
 }
