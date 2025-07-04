@@ -58,7 +58,7 @@ func newWebSocket(conn *websocket.Conn) *WebSocket {
 		conn:        conn,
 		done:        make(chan struct{}),
 		readTimeout: 0, // 默认无超时
-		logger:      log.New(os.Stderr, "[WS] ", log.LstdFlags),
+		logger:      log.New(os.Stdout, "[WS] ", log.LstdFlags),
 	}
 }
 
