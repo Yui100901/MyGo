@@ -12,20 +12,18 @@ import (
 //
 
 func TestMQTTClient(t *testing.T) {
-	c := NewMQTTClient(
+	c, _ := NewMQTTClient(
 		MQTTConfiguration{
 			ID:       "test",
-			URL:      "tcp://127.0.0.1:1883",
+			URL:      "tcp://8.147.130.215:19683",
 			Username: "",
 			Password: "",
-		}, map[string]byte{
-			"test": 0,
-		}, func(client mqtt.Client, message mqtt.Message) {
-			t.Log(message.Topic(), string(message.Payload()))
 		})
-	c.SubscribeDefault()
-	for range 10 {
+	c.Subscribe("Vehicle-7_stream_mic", 0, func(client mqtt.Client, message mqtt.Message) {
+
+	})
+	for {
 		time.Sleep(1 * time.Second)
-		c.Publish(NewMQTTPublishRequest("test", 0, false, "test message"))
+		c.Publish(NewMQTTPublishRequest("test", 0, false, []byte("test message")))
 	}
 }
