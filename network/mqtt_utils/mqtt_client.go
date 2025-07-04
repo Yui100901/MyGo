@@ -52,7 +52,7 @@ func NewMQTTClient(config MQTTConfiguration) (*MQTTClient, error) {
 	c := &MQTTClient{
 		subscriptions: make(map[string]*Subscription),
 		stopChan:      make(chan struct{}),
-		logger:        log.New(os.Stderr, "[MQTT] ", log.LstdFlags),
+		logger:        log.New(os.Stdout, "[MQTT] ", log.LstdFlags),
 	}
 
 	opts := mqtt.NewClientOptions()
