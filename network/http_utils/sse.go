@@ -13,7 +13,7 @@ import (
 // SSEMessage SSE标准消息
 type SSEMessage struct {
 	Event   string // 事件类型（可选）
-	Data    []byte // 消息内容（必填），支持多行文本（自动分割为多个 data: 行）
+	Data    []byte // 消息内容（必填），支持多行文本
 	ID      string // 消息ID（可选）
 	Comment string // 注释（可选），以冒号开头
 	Retry   int    // 客户端重连时间（单位：毫秒，可选）
