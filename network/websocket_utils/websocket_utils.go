@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-// 生产环境应配置严格的源检查
+// WSServer 生产环境应配置严格的源检查
 var WSServer = websocket.Upgrader{
 	CheckOrigin: func(r *http.Request) bool {
 		return true
