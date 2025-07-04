@@ -33,7 +33,7 @@ func NewHTTPClient() *HTTPClient {
 			Timeout: defaultTimeout,
 			Jar:     jar,
 		},
-		Logger: log.New(os.Stderr, "[HTTP] ", log.LstdFlags),
+		Logger: log.New(os.Stdout, "[HTTP] ", log.LstdFlags),
 	}
 }
 
