@@ -81,8 +81,8 @@ func (sm *SSEMessage) Encode() []byte {
 	return []byte(buf.String())
 }
 
-// Connection 表示单个SSE连接
-type Connection struct {
+// SSEConnection 表示单个SSE连接
+type SSEConnection struct {
 	w          http.ResponseWriter
 	flusher    http.Flusher
 	logger     *log.Logger
@@ -90,7 +90,7 @@ type Connection struct {
 }
 
 // NewConnection 创建新的SSE连接
-func NewConnection(w http.ResponseWriter) (*Connection, error) {
+func NewConnection(w http.ResponseWriter) (*SSEConnection, error) {
 	// 设置SSE响应头
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
@@ -106,7 +106,7 @@ func NewConnection(w http.ResponseWriter) (*Connection, error) {
 	_, _ = w.Write([]byte(":\n\n"))
 	flusher.Flush()
 
-	return &Connection{
+	return &SSEConnection{
 		w:       w,
 		flusher: flusher,
 		logger:  log.New(os.Stdout, "[SSE] ", log.LstdFlags),
@@ -114,7 +114,7 @@ func NewConnection(w http.ResponseWriter) (*Connection, error) {
 }
 
 // Send 发送SSE消息
-func (c *Connection) Send(msg *SSEMessage) error {
+func (c *SSEConnection) Send(msg *SSEMessage) error {
 	data := msg.Encode()
 	if _, err := c.w.Write(data); err != nil {
 		c.logger.Printf("发送消息失败: %v", err)
@@ -126,7 +126,7 @@ func (c *Connection) Send(msg *SSEMessage) error {
 }
 
 // StartHeartbeat 启动心跳机制
-func (c *Connection) StartHeartbeat(interval time.Duration) {
+func (c *SSEConnection) StartHeartbeat(interval time.Duration) {
 	if c.pingTicker != nil {
 		c.pingTicker.Stop()
 	}
@@ -145,7 +145,7 @@ func (c *Connection) StartHeartbeat(interval time.Duration) {
 }
 
 // StopHeartbeat 停止心跳
-func (c *Connection) StopHeartbeat() {
+func (c *SSEConnection) StopHeartbeat() {
 	if c.pingTicker != nil {
 		c.pingTicker.Stop()
 		c.pingTicker = nil
@@ -153,7 +153,7 @@ func (c *Connection) StopHeartbeat() {
 }
 
 // Close 关闭连接
-func (c *Connection) Close() {
+func (c *SSEConnection) Close() {
 	c.StopHeartbeat()
 	c.logger.Printf("连接已关闭")
 }
