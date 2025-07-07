@@ -264,7 +264,6 @@ func (r *HTTPRequest) prepareMultipartBody() (io.Reader, string, error) {
 			Logger.Printf("打开文件失败: %s - %v", filePath, err)
 			return nil, "", fmt.Errorf("打开文件失败: %w", err)
 		}
-		defer file.Close()
 
 		part, err := writer.CreateFormFile(fieldName, filepath.Base(filePath))
 		if err != nil {
@@ -278,6 +277,10 @@ func (r *HTTPRequest) prepareMultipartBody() (io.Reader, string, error) {
 		}
 
 		Logger.Printf("添加文件: %s -> %s (%d bytes)", fieldName, filePath, fileSize(file))
+		// 显式关闭文件
+		if err := file.Close(); err != nil {
+			Logger.Printf("关闭文件失败: %v", err)
+		}
 	}
 
 	// 添加普通表单字段
