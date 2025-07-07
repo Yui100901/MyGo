@@ -113,8 +113,8 @@ func NewConnection(w http.ResponseWriter) (*SSEConnection, error) {
 	}, nil
 }
 
-// Send 发送SSE消息
-func (c *SSEConnection) Send(msg *SSEMessage) error {
+// SendMessage 发送SSE消息
+func (c *SSEConnection) SendMessage(msg *SSEMessage) error {
 	data := msg.Encode()
 	if _, err := c.w.Write(data); err != nil {
 		c.logger.Printf("发送消息失败: %v", err)
