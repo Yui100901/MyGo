@@ -103,7 +103,9 @@ func NewConnection(w http.ResponseWriter) (*SSEConnection, error) {
 	}
 
 	// 发送初始空消息以建立连接
-	_, _ = w.Write([]byte(":\n\n"))
+	if _, err := w.Write([]byte(":\n\n")); err != nil {
+		return nil, fmt.Errorf("初始写入失败，可能客户端已断开: %w", err)
+	}
 	flusher.Flush()
 
 	return &SSEConnection{
@@ -121,7 +123,7 @@ func (c *SSEConnection) SendMessage(msg *SSEMessage) error {
 		return err
 	}
 	c.flusher.Flush()
-	c.logger.Printf("消息已发送: %s", string(msg.Data))
+	c.logger.Printf("消息发送成功 (长度: %d字节)", len(data))
 	return nil
 }
 
