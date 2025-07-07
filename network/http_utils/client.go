@@ -174,6 +174,12 @@ func (c *HTTPClient) Get(url string, headers map[string]string) (*HTTPResponse, 
 	return c.Execute(req)
 }
 
+func (c *HTTPClient) Post(url string, headers map[string]string) (*HTTPResponse, error) {
+	req := NewHTTPRequest(http.MethodPost, url)
+	req.SetHeaders(headers)
+	return c.Execute(req)
+}
+
 // PostJSON 执行POST JSON请求
 func (c *HTTPClient) PostJSON(url string, body interface{}, headers map[string]string) (*HTTPResponse, error) {
 	req := NewHTTPRequest(http.MethodPost, url)
