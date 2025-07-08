@@ -31,6 +31,11 @@ type WebSocket struct {
 	writeMu     sync.Mutex
 	readTimeout time.Duration // 可配置的读取超时
 	logger      *log.Logger   // 日志记录器
+
+	// 心跳相关字段
+	heartbeatInterval time.Duration
+	heartbeatTicker   *time.Ticker
+	heartbeatMutex    sync.Mutex
 }
 
 // NewWebSocketByUpgrade 升级HTTP连接
@@ -70,6 +75,80 @@ func (ws *WebSocket) SetLogger(logger *log.Logger) {
 // SetReadTimeout 设置读取超时
 func (ws *WebSocket) SetReadTimeout(timeout time.Duration) {
 	ws.readTimeout = timeout
+}
+
+// StartHeartbeat 启动心跳机制
+func (ws *WebSocket) StartHeartbeat(interval time.Duration) {
+	ws.heartbeatMutex.Lock()
+	defer ws.heartbeatMutex.Unlock()
+
+	// 如果已经存在心跳定时器，先停止
+	if ws.heartbeatTicker != nil {
+		ws.heartbeatTicker.Stop()
+	}
+
+	ws.heartbeatInterval = interval
+	if interval <= 0 {
+		ws.logger.Println("心跳已禁用")
+		return
+	}
+
+	ws.heartbeatTicker = time.NewTicker(interval)
+	ws.logger.Printf("启动心跳，间隔: %v (Remote: %s)", interval, ws.RemoteAddr())
+
+	// 设置Pong处理器
+	ws.conn.SetPongHandler(func(appData string) error {
+		ws.logger.Printf("收到Pong (Remote: %s)", ws.RemoteAddr())
+		return nil
+	})
+
+	go ws.heartbeatLoop()
+}
+
+// StopHeartbeat 停止心跳机制
+func (ws *WebSocket) StopHeartbeat() {
+	ws.heartbeatMutex.Lock()
+	defer ws.heartbeatMutex.Unlock()
+
+	if ws.heartbeatTicker != nil {
+		ws.heartbeatTicker.Stop()
+		ws.heartbeatTicker = nil
+		ws.logger.Printf("心跳已停止 (Remote: %s)", ws.RemoteAddr())
+	}
+}
+
+// heartbeatLoop 心跳循环
+func (ws *WebSocket) heartbeatLoop() {
+	lastResponse := time.Now()
+
+	for {
+		select {
+		case <-ws.done:
+			ws.logger.Printf("心跳协程退出 (Remote: %s)", ws.RemoteAddr())
+			return
+		case t := <-ws.heartbeatTicker.C:
+			// 检查上次响应时间
+			if time.Since(lastResponse) > ws.heartbeatInterval*2 {
+				ws.logger.Printf("心跳超时，未收到响应 (Remote: %s)", ws.RemoteAddr())
+				ws.safeClose()
+				return
+			}
+
+			// 发送Ping
+			ws.writeMu.Lock()
+			err := ws.conn.WriteControl(websocket.PingMessage, []byte{}, t.Add(writeTimeout))
+			ws.writeMu.Unlock()
+
+			if err != nil {
+				ws.logger.Printf("发送心跳失败: %v (Remote: %s)", err, ws.RemoteAddr())
+				ws.safeClose()
+				return
+			}
+
+			ws.logger.Printf("发送心跳Ping (Remote: %s)", ws.RemoteAddr())
+			lastResponse = t
+		}
+	}
 }
 
 // OnMessage 持续处理消息
@@ -141,6 +220,9 @@ func (ws *WebSocket) Close() {
 
 func (ws *WebSocket) safeClose() {
 	ws.closeOnce.Do(func() {
+		// 先停止心跳
+		ws.StopHeartbeat()
+
 		close(ws.done) // 通知所有消费者
 
 		// 发送关闭帧
