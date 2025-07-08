@@ -19,17 +19,17 @@ type HTTPResult struct {
 	err      error
 }
 
-func ReadBodyByte(response *http.Response) ([]byte, error) {
+func ReadBodyBytes(response *http.Response) ([]byte, error) {
 	if response.Body != nil {
 		defer response.Body.Close()
 	} else {
 		return nil, fmt.Errorf("nil response body")
 	}
-	data, err := io.ReadAll(response.Body)
+	bytesData, err := io.ReadAll(response.Body)
 	if err != nil {
 		return nil, fmt.Errorf("read response body: %w", err)
 	}
-	return data, nil
+	return bytesData, nil
 }
 
 func (r *HTTPResult) Response() (*http.Response, error) {
@@ -44,7 +44,7 @@ func (r *HTTPResult) ParseJSON(target interface{}) error {
 	if r.err != nil {
 		return r.err
 	}
-	data, err := ReadBodyByte(r.response)
+	data, err := ReadBodyBytes(r.response)
 	if err != nil {
 		return fmt.Errorf("read response body: %w", err)
 	}
@@ -53,7 +53,7 @@ func (r *HTTPResult) ParseJSON(target interface{}) error {
 
 // GetBodyString 获取响应体字符串
 func (r *HTTPResult) GetBodyString() (string, error) {
-	data, err := ReadBodyByte(r.response)
+	data, err := ReadBodyBytes(r.response)
 	if err != nil {
 		return "", fmt.Errorf("read response body: %w", err)
 	}
