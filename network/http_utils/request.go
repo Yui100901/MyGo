@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"mime/multipart"
@@ -308,31 +307,4 @@ func setHeaders(req *http.Request, headers map[string]string) {
 	for key, value := range headers {
 		req.Header.Set(key, value)
 	}
-}
-
-// HTTPResponse 封装 HTTP 响应
-type HTTPResponse struct {
-	StatusCode int               // 状态码
-	Headers    map[string]string // 响应头
-	Body       []byte            // 响应体
-	RequestURL string            // 请求URL
-	Duration   time.Duration     // 请求耗时
-}
-
-// ParseJSON 解析 JSON 响应
-func (resp *HTTPResponse) ParseJSON(target interface{}) error {
-	if resp.Body == nil {
-		return errors.New("响应体为空")
-	}
-	return json.Unmarshal(resp.Body, target)
-}
-
-// GetBodyString 获取响应体字符串
-func (resp *HTTPResponse) GetBodyString() string {
-	return string(resp.Body)
-}
-
-// IsSuccess 判断请求是否成功 (2xx 状态码)
-func (resp *HTTPResponse) IsSuccess() bool {
-	return resp.StatusCode >= 200 && resp.StatusCode < 300
 }

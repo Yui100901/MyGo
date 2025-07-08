@@ -4,11 +4,9 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"net/http/cookiejar"
 	"net/url"
-	"os"
 	"time"
 )
 
@@ -110,7 +108,7 @@ func (c *HTTPClient) EnableConnectionPool(maxIdle, maxIdlePerHost int) {
 }
 
 // Do 执行HTTP请求
-func (c *HTTPClient) Do(req *http.Request) (*HTTPResponse, error) {
+func (c *HTTPClient) Do(req *http.Request) *HTTPResult {
 	start := time.Now()
 	Logger.Printf("开始请求: %s %s", req.Method, req.URL.String())
 
@@ -123,20 +121,13 @@ func (c *HTTPClient) Do(req *http.Request) (*HTTPResponse, error) {
 	if err != nil {
 		Logger.Printf("请求失败: %s %s | 错误: %v | 耗时: %v",
 			req.Method, req.URL, err, duration)
-		return nil, fmt.Errorf("请求失败: %w", err)
+		return &HTTPResult{
+			nil, fmt.Errorf("请求失败: %w", err),
+		}
 	}
-	defer resp.Body.Close()
 
 	Logger.Printf("请求完成: %s %s | 状态: %d | 耗时: %v",
 		req.Method, req.URL, resp.StatusCode, duration)
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		Logger.Printf("读取响应体失败: %v", err)
-		return nil, fmt.Errorf("读取响应体失败: %w", err)
-	}
-
-	Logger.Printf("响应体大小: %d bytes", len(body))
 
 	headers := make(map[string]string)
 	for key, values := range resp.Header {
@@ -148,95 +139,57 @@ func (c *HTTPClient) Do(req *http.Request) (*HTTPResponse, error) {
 	// 记录响应头 (过滤敏感信息)
 	c.logResponseHeaders(headers)
 
-	return &HTTPResponse{
-		StatusCode: resp.StatusCode,
-		Headers:    headers,
-		Body:       body,
-		RequestURL: req.URL.String(),
-		Duration:   duration,
-	}, nil
+	return &HTTPResult{resp, nil}
 }
 
-// Execute 执行HTTP请求并返回响应
-func (c *HTTPClient) Execute(request *HTTPRequest) (*HTTPResponse, error) {
+// SendRequest 执行HTTP请求并返回响应
+func (c *HTTPClient) SendRequest(request *HTTPRequest) *HTTPResult {
 	req, err := request.BuildRequest()
 	if err != nil {
 		Logger.Printf("构建请求失败: %v", err)
-		return nil, fmt.Errorf("构建请求失败: %w", err)
+		return &HTTPResult{nil, fmt.Errorf("构建请求失败: %w", err)}
 	}
 	return c.Do(req)
 }
 
 // Get 执行GET请求
-func (c *HTTPClient) Get(url string, headers map[string]string) (*HTTPResponse, error) {
+func (c *HTTPClient) Get(url string, headers map[string]string, queryParams map[string]string) *HTTPResult {
 	req := NewHTTPRequest(http.MethodGet, url)
 	req.SetHeaders(headers)
-	return c.Execute(req)
+	req.SetQueryParams(queryParams)
+	return c.SendRequest(req)
 }
 
-func (c *HTTPClient) Post(url string, headers map[string]string) (*HTTPResponse, error) {
+// Post 执行POST请求
+func (c *HTTPClient) Post(url string, headers map[string]string) *HTTPResult {
 	req := NewHTTPRequest(http.MethodPost, url)
 	req.SetHeaders(headers)
-	return c.Execute(req)
+	return c.SendRequest(req)
 }
 
 // PostJSON 执行POST JSON请求
-func (c *HTTPClient) PostJSON(url string, body interface{}, headers map[string]string) (*HTTPResponse, error) {
+func (c *HTTPClient) PostJSON(url string, body interface{}, headers map[string]string) *HTTPResult {
 	req := NewHTTPRequest(http.MethodPost, url)
 	req.SetJSONBody(body)
 	req.SetHeaders(headers)
-	return c.Execute(req)
+	return c.SendRequest(req)
 }
 
 // PostForm 执行表单POST请求
-func (c *HTTPClient) PostForm(url string, formData map[string]string, headers map[string]string) (*HTTPResponse, error) {
+func (c *HTTPClient) PostForm(url string, formData map[string]string, headers map[string]string) *HTTPResult {
 	req := NewHTTPRequest(http.MethodPost, url)
 	req.SetFormData(formData)
 	req.SetHeaders(headers)
-	return c.Execute(req)
+	return c.SendRequest(req)
 }
 
 // PostMultipart 执行multipart/form-data POST请求
-func (c *HTTPClient) PostMultipart(url string, formData map[string]string, files map[string]string, headers map[string]string) (*HTTPResponse, error) {
+func (c *HTTPClient) PostMultipart(url string, formData map[string]string, files map[string]string, headers map[string]string) *HTTPResult {
 	req := NewHTTPRequest(http.MethodPost, url)
 	req.FormData = formData
 	for field, filePath := range files {
 		req.AddFormFile(field, filePath)
 	}
 	req.SetHeaders(headers)
-	return c.Execute(req)
-}
-
-// DownloadFile 下载文件到指定路径
-func (c *HTTPClient) DownloadFile(url, filePath string) error {
-	Logger.Printf("开始下载文件: %s -> %s", url, filePath)
-
-	start := time.Now()
-	resp, err := c.Get(url, nil)
-	if err != nil {
-		return err
-	}
-
-	if !resp.IsSuccess() {
-		err := fmt.Errorf("下载失败: 状态码 %d", resp.StatusCode)
-		Logger.Printf("下载失败: %v", err)
-		return err
-	}
-
-	file, err := os.Create(filePath)
-	if err != nil {
-		Logger.Printf("创建文件失败: %v", err)
-		return fmt.Errorf("创建文件失败: %w", err)
-	}
-	defer file.Close()
-
-	_, err = file.Write(resp.Body)
-	if err != nil {
-		Logger.Printf("写入文件失败: %v", err)
-		return fmt.Errorf("写入文件失败: %w", err)
-	}
-
-	Logger.Printf("文件下载成功: %s | 大小: %d bytes | 耗时: %v",
-		filePath, len(resp.Body), time.Since(start))
-	return nil
+	return c.SendRequest(req)
 }

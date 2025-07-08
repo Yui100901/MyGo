@@ -1,7 +1,6 @@
 package http_utils
 
 import (
-	"net/http"
 	"testing"
 )
 
@@ -12,11 +11,11 @@ import (
 
 func TestHTTPClient(t *testing.T) {
 	c := NewHTTPClient()
-	data, err := c.GetResponseData(NewHTTPRequest(http.MethodGet, "http://www.example.com?a=b", map[string]string{
-		"foo": "bar",
-	}, nil, nil))
+	res, err := c.
+		Get("http://www.example.com?a=b", nil, nil).
+		GetBodyString()
 	if err != nil {
 		t.Log(err)
 	}
-	t.Log(string(data))
+	t.Log(res)
 }
