@@ -3,18 +3,20 @@ package validator
 import (
 	"errors"
 	"fmt"
+	"github.com/Yui100901/MyGo/log_utils"
 	"golang.org/x/exp/constraints"
 	"reflect"
 	"regexp"
-	"sync"
+	"sync" // For sync.Once in PatternConstraint
 	"time"
 	"unicode/utf8"
 )
 
-//
 // @Author yfy2001
-// @Date 2025/7/10 11 19
-//
+// @Date 2025/7/10 11:19
+
+// Validator 接口定义了所有验证器必须实现的方法。
+// (此接口的定义移至 validator.go 以保持一致性)
 
 // RangeConstraint 数值范围约束，支持所有有序类型（例如：int, float64, string 等）。
 type RangeConstraint[T constraints.Ordered] struct {
@@ -26,17 +28,17 @@ type RangeConstraint[T constraints.Ordered] struct {
 func (c *RangeConstraint[T]) Validate(value interface{}) error {
 	val, ok := value.(T)
 	if !ok {
+		// 检查类型是否匹配，如果不匹配则返回类型错误。
 		return fmt.Errorf("类型错误：期望类型 %T，实际为 %T", *new(T), value)
 	}
-	// 使用解引用简化比较逻辑
-	rangeMin, rangeMax := c.Min, c.Max
-	if rangeMin != nil && val < *rangeMin {
-		return fmt.Errorf("值 %v 超出范围：小于最小值 %v", val, *rangeMin)
+	// 使用局部变量简化比较逻辑
+	if c.Min != nil && val < *c.Min {
+		return fmt.Errorf("值 %v 超出范围：小于最小值 %v", val, *c.Min)
 	}
-	if rangeMax != nil && val > *rangeMax {
-		return fmt.Errorf("值 %v 超出范围：大于最大值 %v", val, *rangeMax)
+	if c.Max != nil && val > *c.Max {
+		return fmt.Errorf("值 %v 超出范围：大于最大值 %v", val, *c.Max)
 	}
-	return nil
+	return nil // 验证通过
 }
 
 // LengthConstraint 长度约束，支持字符串、字节切片、数组、切片、映射和通道等类型。
@@ -46,20 +48,28 @@ type LengthConstraint struct {
 }
 
 // getLength 根据值的类型获取其长度。
-// 添加对指针类型的支持
+// 增加了对指针类型和接口类型的递归支持。
 func (c *LengthConstraint) getLength(value interface{}) (int, error) {
+	if value == nil {
+		return 0, nil // nil 值的长度视为 0
+	}
+
 	rv := reflect.ValueOf(value)
 	switch rv.Kind() {
 	case reflect.Ptr, reflect.Interface:
+		// 递归解引用指针或接口，直到获取到具体值
 		if rv.IsNil() {
 			return 0, nil
 		}
 		return c.getLength(rv.Elem().Interface())
 	case reflect.String:
+		// 字符串按 Unicode 字符数计算长度
 		return utf8.RuneCountInString(rv.String()), nil
 	case reflect.Array, reflect.Slice, reflect.Map, reflect.Chan:
+		// 数组、切片、映射、通道按其元素数量计算长度
 		return rv.Len(), nil
 	default:
+		// 对于不支持长度验证的类型，返回错误。
 		return 0, fmt.Errorf("不支持长度验证的类型：%T", value)
 	}
 }
@@ -120,34 +130,48 @@ func (c *EnumConstraint[T]) Validate(value interface{}) error {
 type RequiredConstraint struct{}
 
 // Validate 检查给定值是否为必需的（非空）。
+// 优化为更全面的 nil 和空值检查。
 func (c *RequiredConstraint) Validate(value interface{}) error {
 	if value == nil {
-		return fmt.Errorf("值不能为 nil")
+		return errors.New("值不能为 nil")
 	}
 
 	rv := reflect.ValueOf(value)
-	if rv.Kind() == reflect.Ptr && rv.IsNil() {
-		return errors.New("指针不能为 nil")
+	switch rv.Kind() {
+	case reflect.Ptr, reflect.Interface, reflect.Func:
+		// 对于引用类型，检查其是否为 nil
+		if rv.IsNil() {
+			return fmt.Errorf("%s 类型不能为 nil", rv.Kind().String())
+		}
+	case reflect.Slice, reflect.Map, reflect.Chan:
+		if rv.IsNil() {
+			return fmt.Errorf("%s 类型不能为 nil", rv.Kind().String())
+		}
+		if rv.Len() == 0 {
+			return fmt.Errorf("%s 不能为空", rv.Kind().String())
+		}
+	case reflect.String, reflect.Array:
+		// 对于字符串和数组，检查其长度是否为 0
+		log_utils.Info.Println(rv.Type())
+		if rv.Len() == 0 {
+			return fmt.Errorf("%s 类型不能为空", rv.Kind().String())
+		}
+	default:
+		return nil
 	}
-	// 简化空值检查逻辑
-	if rv.Kind() == reflect.String && rv.Len() == 0 {
-		return errors.New("字符串不能为空")
-	}
-	if rv.Kind() == reflect.Slice && rv.Len() == 0 {
-		return errors.New("切片不能为空")
-	}
-	return nil
+	return nil // 验证通过
 }
 
 // PatternConstraint 正则表达式约束，用于检查字符串或字节切片是否符合指定的正则表达式。
-// 在 PatternConstraint 中使用 sync.Once 延迟编译正则
+// 使用 sync.Once 确保正则表达式只编译一次，且在第一次 Validate 调用时进行惰性编译。
 type PatternConstraint struct {
 	Pattern string
 	once    sync.Once
 	regex   *regexp.Regexp
-	initErr error
+	initErr error // 用于存储正则表达式编译时可能发生的错误
 }
 
+// compile 编译正则表达式。此方法通过 sync.Once 确保只执行一次。
 func (c *PatternConstraint) compile() {
 	c.once.Do(func() {
 		if c.Pattern == "" {
@@ -158,20 +182,19 @@ func (c *PatternConstraint) compile() {
 	})
 }
 
-// NewPatternConstraint 是创建 PatternConstraint 的便捷函数，并预编译正则表达式。
-func NewPatternConstraint(pattern string) (*PatternConstraint, error) {
-	if pattern == "" {
-		return nil, fmt.Errorf("正则表达式不能为空")
-	}
-	return &PatternConstraint{Pattern: pattern}, nil
+// NewPatternConstraint 是创建 PatternConstraint 的便捷函数。
+// 注意：正则表达式的编译被延迟到第一次 Validate 调用时。
+func NewPatternConstraint(pattern string) *PatternConstraint {
+	return &PatternConstraint{Pattern: pattern}
 }
 
 // Validate 检查给定值是否符合指定的正则表达式模式。
 func (c *PatternConstraint) Validate(value interface{}) error {
-	c.compile()
+	c.compile() // 确保正则表达式已编译
 	if c.initErr != nil {
-		return c.initErr
+		return c.initErr // 如果编译失败，直接返回编译错误
 	}
+
 	var s string
 	switch v := value.(type) {
 	case string:
@@ -193,7 +216,7 @@ func (c *PatternConstraint) Validate(value interface{}) error {
 
 // TimeConstraint 时间约束，用于验证时间戳或时间字符串。
 type TimeConstraint struct {
-	Format *string    // 可选的时间格式字符串（例如 "2006-01-02 15:04:05"）。如果为 nil，则验证时间戳。
+	Format *string    // 可选的时间格式字符串（例如 "2006-01-02 15:04:05"）。如果为 nil，则验证时间戳或 time.Time。
 	Min    *time.Time // 可选的最小时间点。
 	Max    *time.Time // 可选的最大时间点。
 }
@@ -227,8 +250,7 @@ func (v *TimeConstraint) Validate(value interface{}) error {
 		}
 
 		// 简单的有效性检查：如果解析后的时间是零值且不是 Unix 纪元，则可能无效。
-		// 更严格的检查可能需要判断时间戳是否为负数或超出合理范围。
-		if t.IsZero() && value != 0 && value != int64(0) {
+		if t.IsZero() && value != 0 && value != int64(0) { // 检查是否是实际的零值，而不是 epoch 0
 			return errors.New("无效的时间值")
 		}
 	}
@@ -261,8 +283,8 @@ func (v *ArrayConstraint) Validate(value interface{}) error {
 		for i := 0; i < rv.Len(); i++ {
 			// 对每个元素进行验证
 			if err := v.Item.Validate(rv.Index(i).Interface()); err != nil {
-				// 返回带有索引和原始错误的详细错误信息。
-				return fmt.Errorf("[%d]%w", i, err)
+				// 返回带有索引和原始错误的详细错误信息，使用 %w 包装。
+				return fmt.Errorf("数组/切片元素 [%d] 验证失败: %w", i, err)
 			}
 		}
 	default:
@@ -283,25 +305,16 @@ func NewTypeConstraint(t reflect.Type) *TypeConstraint {
 }
 
 // Validate 检查给定值的类型是否可以赋值给期望的类型。
+// 类型约束只关注类型兼容性，不处理空值
 func (c *TypeConstraint) Validate(value interface{}) error {
-	actual := reflect.TypeOf(value)
-	if actual == nil {
-		// 如果值为 nil，且期望的类型不是接口或指针，则返回错误。
-		// 这里可以根据实际需求调整 nil 值的处理逻辑。
-		if c.ExpectedType.Kind() != reflect.Interface && c.ExpectedType.Kind() != reflect.Ptr {
-			return fmt.Errorf("类型错误：期望 %v，实际为 nil", c.ExpectedType)
-		}
-		return nil // 如果期望的是接口或指针，nil 可能是有效的
+	if value == nil {
+		// 空值直接通过，由上层验证器处理空值逻辑
+		return nil
 	}
 
-	// 使用 AssignableTo 检查实际类型是否可以赋值给期望类型，这比直接相等更灵活。
+	actual := reflect.TypeOf(value)
 	if !actual.AssignableTo(c.ExpectedType) {
 		return fmt.Errorf("类型错误：期望类型 %v，实际类型 %v", c.ExpectedType, actual)
 	}
-	return nil // 验证通过
-}
-
-// CompositeValidator 组合验证器，允许将多个验证器链式应用于同一个值。
-type CompositeValidator struct {
-	validators []Validator // 包含的验证器切片
+	return nil
 }
