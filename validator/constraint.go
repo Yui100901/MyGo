@@ -284,7 +284,7 @@ func (v *ArrayConstraint) Validate(value interface{}) error {
 			// 对每个元素进行验证
 			if err := v.Item.Validate(rv.Index(i).Interface()); err != nil {
 				// 返回带有索引和原始错误的详细错误信息，使用 %w 包装。
-				return fmt.Errorf("数组/切片元素 [%d] 验证失败: %w", i, err)
+				return fmt.Errorf("[%d]:%w", i, err)
 			}
 		}
 	default:
@@ -336,15 +336,23 @@ func (c *StructConstraint) Validate(value interface{}) error {
 // TypeConstraint 类型约束验证器，用于检查值的实际类型是否符合期望。
 type TypeConstraint struct {
 	ExpectedType reflect.Type // 期望的 Go 类型
+	StrictMode   bool
 }
 
 // NewTypeConstraint 是创建 TypeConstraint 的便捷函数。
 func NewTypeConstraint(t reflect.Type) *TypeConstraint {
-	return &TypeConstraint{ExpectedType: t}
+	return &TypeConstraint{ExpectedType: t, StrictMode: false}
+}
+
+// NewTypeConstraintWithMode 创建带模式选项的类型约束验证器
+func NewTypeConstraintWithMode(t reflect.Type, strict bool) *TypeConstraint {
+	return &TypeConstraint{
+		ExpectedType: t,
+		StrictMode:   strict,
+	}
 }
 
 // Validate 检查给定值的类型是否可以赋值给期望的类型。
-// 类型约束只关注类型兼容性，不处理空值
 func (c *TypeConstraint) Validate(value interface{}) error {
 	if value == nil {
 		// 空值直接通过，由上层验证器处理空值逻辑
@@ -352,8 +360,56 @@ func (c *TypeConstraint) Validate(value interface{}) error {
 	}
 
 	actual := reflect.TypeOf(value)
-	if !actual.AssignableTo(c.ExpectedType) {
-		return fmt.Errorf("类型错误：期望类型 %v，实际类型 %v", c.ExpectedType, actual)
+
+	// 1. 严格模式：直接检查类型兼容性
+	if c.StrictMode {
+		if !actual.AssignableTo(c.ExpectedType) {
+			return fmt.Errorf("类型错误：期望类型 %v，实际类型 %v", c.ExpectedType, actual)
+		}
+		return nil
 	}
-	return nil
+
+	// 2. 非严格模式：允许基本类型之间的转换
+	expectedKind := c.ExpectedType.Kind()
+	actualKind := actual.Kind()
+
+	// 检查类型兼容性（允许转换）
+	switch {
+	case actual.AssignableTo(c.ExpectedType):
+		// 类型完全兼容
+		return nil
+
+	case isNumericKind(expectedKind) && isNumericKind(actualKind):
+		// 数字类型兼容：int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64, float32, float64
+		return nil
+
+	case expectedKind == reflect.String && actualKind == reflect.SliceOf(reflect.TypeOf(byte(0))).Kind():
+		// 允许 []byte 转 string
+		return nil
+
+	case expectedKind == reflect.SliceOf(reflect.TypeOf(byte(0))).Kind() && actualKind == reflect.String:
+		// 允许 string 转 []byte
+		return nil
+
+	case expectedKind == reflect.Interface:
+		// 期望接口类型，检查是否实现了接口
+		if actual.Implements(c.ExpectedType) {
+			return nil
+		}
+	}
+
+	// 所有其他情况都不兼容
+	return fmt.Errorf("类型错误：期望类型 %v 或兼容类型，实际类型 %v", c.ExpectedType, actual)
+}
+
+// isNumericKind 检查是否为数字类型
+func isNumericKind(k reflect.Kind) bool {
+	switch k {
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
+		reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64,
+		reflect.Float32, reflect.Float64:
+		return true
+	default:
+		return false
+	}
 }
