@@ -294,6 +294,45 @@ func (v *ArrayConstraint) Validate(value interface{}) error {
 	return nil // 验证通过
 }
 
+// StructConstraint 结构体字段验证约束
+type StructConstraint struct {
+	Fields map[string]Validator // 字段路径到验证器的映射
+}
+
+// NewStructConstraint 创建结构体验证器
+func NewStructConstraint(fields map[string]Validator) *StructConstraint {
+	return &StructConstraint{Fields: fields}
+}
+
+// Validate 检查给定值是否为 map[string]interface{} 并根据定义的字段验证器进行验证。
+func (c *StructConstraint) Validate(value interface{}) error {
+	// 结构体的值应为 map[string]interface{}
+	mapValue, ok := value.(map[string]interface{})
+	if !ok {
+		return fmt.Errorf("type error: expected map[string]interface{} for struct validation, got %T", value)
+	}
+
+	// 遍历所有定义的字段验证器
+	for fieldName, fieldValidator := range c.Fields {
+		fieldValue, exists := mapValue[fieldName]
+
+		// 注意：此处的必填逻辑很简单。
+		// 一个更复杂的实现可能会有一个单独的 "Required" 约束，
+		// 而不是在这里假设所有字段都是必需的。
+		// 当前实现为了简单起见，假设如果字段在验证器中定义，它就是必需的。
+		if !exists {
+			return fmt.Errorf("missing required field: %s", fieldName)
+		}
+
+		// 验证字段值
+		if err := fieldValidator.Validate(fieldValue); err != nil {
+			return fmt.Errorf("field '%s' validation failed: %w", fieldName, err)
+		}
+	}
+
+	return nil
+}
+
 // TypeConstraint 类型约束验证器，用于检查值的实际类型是否符合期望。
 type TypeConstraint struct {
 	ExpectedType reflect.Type // 期望的 Go 类型

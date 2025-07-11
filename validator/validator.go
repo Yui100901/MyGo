@@ -27,6 +27,11 @@ func NewCompositeValidator(validators ...Validator) *CompositeValidator {
 	return &CompositeValidator{validators: validators}
 }
 
+// Add 为组合验证器添加验证器
+func (cv *CompositeValidator) Add(validators ...Validator) {
+	cv.validators = append(cv.validators, validators...)
+}
+
 // Validate 依次执行所有组合的验证器。
 // 如果任何一个验证器失败，则立即返回错误，并使用 %w 包装原始错误，以便进行错误链追踪。
 // 如果所有验证器都通过，则返回 nil。
