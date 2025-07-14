@@ -18,6 +18,29 @@ import (
 // Validator 接口定义了所有验证器必须实现的方法。
 // (此接口的定义移至 validator.go 以保持一致性)
 
+func Convert[T any](value any) (T, error) {
+	var val T
+	var ok bool
+
+	// 首先尝试直接类型断言
+	val, ok = value.(T)
+	if !ok {
+		// 类型断言失败：尝试通过反射转换
+		v := reflect.ValueOf(value)
+		tType := reflect.TypeOf(val) // 获取T的具体类型
+
+		// 检查值类型是否可转换为T
+		if !v.Type().ConvertibleTo(tType) {
+			return val, fmt.Errorf("类型错误：期望类型 %T，实际为 %T", val, value)
+		}
+
+		// 执行安全转换
+		converted := v.Convert(tType)
+		val = converted.Interface().(T) // 转换成功后可安全断言
+	}
+	return val, nil
+}
+
 // RangeConstraint 数值范围约束，支持所有有序类型（例如：int, float64, string 等）。
 type RangeConstraint[T constraints.Ordered] struct {
 	Min *T // 可选的最小值指针。如果为 nil，则不检查最小值。
@@ -26,11 +49,11 @@ type RangeConstraint[T constraints.Ordered] struct {
 
 // Validate 检查给定值是否在指定的数值范围内。
 func (c *RangeConstraint[T]) Validate(value interface{}) error {
-	val, ok := value.(T)
-	if !ok {
-		// 检查类型是否匹配，如果不匹配则返回类型错误。
-		return fmt.Errorf("类型错误：期望类型 %T，实际为 %T", *new(T), value)
+	val, err := Convert[T](value)
+	if err != nil {
+		return err
 	}
+
 	// 使用局部变量简化比较逻辑
 	if c.Min != nil && val < *c.Min {
 		return fmt.Errorf("值 %v 超出范围：小于最小值 %v", val, *c.Min)
@@ -113,10 +136,9 @@ func (c *EnumConstraint[T]) Validate(value interface{}) error {
 		return fmt.Errorf("枚举约束配置无效：允许值集合为空")
 	}
 
-	val, ok := value.(T)
-	if !ok {
-		// 检查类型是否匹配，如果不匹配则返回类型错误。
-		return fmt.Errorf("类型错误：期望类型 %T，实际为 %T", *new(T), value)
+	val, err := Convert[T](value)
+	if err != nil {
+		return err
 	}
 
 	if _, exists := c.Allowed[val]; !exists {
@@ -243,6 +265,10 @@ func (v *TimeConstraint) Validate(value interface{}) error {
 			t = time.Unix(int64(val), 0) // 将 int 转换为 Unix 时间戳
 		case int64:
 			t = time.Unix(val, 0) // 将 int64 转换为 Unix 时间戳
+		case float32:
+			t = time.Unix(int64(val), 0)
+		case float64:
+			t = time.Unix(int64(val), 0)
 		case time.Time:
 			t = val // 直接使用 time.Time 类型
 		default:

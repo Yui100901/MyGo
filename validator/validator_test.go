@@ -15,9 +15,9 @@ func TestRangeConstraint(t *testing.T) {
 		min := 10
 		max := 20
 		c := &RangeConstraint[int]{Min: &min, Max: &max}
-
+		x := 5.0
 		assert.NoError(t, c.Validate(15))
-		assert.ErrorContains(t, c.Validate(5), "小于最小值")
+		assert.ErrorContains(t, c.Validate(x), "小于最小值")
 		assert.ErrorContains(t, c.Validate(25), "大于最大值")
 		assert.ErrorContains(t, c.Validate("string"), "类型错误")
 	})
@@ -26,7 +26,7 @@ func TestRangeConstraint(t *testing.T) {
 		min := 1.5
 		c := &RangeConstraint[float64]{Min: &min}
 
-		assert.NoError(t, c.Validate(2.0))
+		assert.NoError(t, c.Validate(2))
 		assert.ErrorContains(t, c.Validate(1.0), "小于最小值")
 	})
 
