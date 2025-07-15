@@ -294,3 +294,26 @@ func MarshalData(value any, format DataFormat) ([]byte, error) {
 
 	return result, nil
 }
+
+func ConvertTo[T any](value any) (T, error) {
+	var val T
+	var ok bool
+
+	// 首先尝试直接类型断言
+	val, ok = value.(T)
+	if !ok {
+		// 类型断言失败：尝试通过反射转换
+		v := reflect.ValueOf(value)
+		tType := reflect.TypeOf(val) // 获取T的具体类型
+
+		// 检查值类型是否可转换为T
+		if !v.Type().ConvertibleTo(tType) {
+			return val, fmt.Errorf("can not convert: %T", value)
+		}
+
+		// 执行安全转换
+		converted := v.Convert(tType)
+		val = converted.Interface().(T) // 转换成功后可安全断言
+	}
+	return val, nil
+}

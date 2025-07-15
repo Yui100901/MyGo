@@ -320,13 +320,18 @@ func (v *ArrayConstraint) Validate(value interface{}) error {
 	return nil // 验证通过
 }
 
+type FieldConstraint struct {
+	Required  bool
+	Validator Validator
+}
+
 // StructConstraint 结构体字段验证约束
 type StructConstraint struct {
-	Fields map[string]Validator // 字段路径到验证器的映射
+	Fields map[string]FieldConstraint // 字段路径到验证器的映射
 }
 
 // NewStructConstraint 创建结构体验证器
-func NewStructConstraint(fields map[string]Validator) *StructConstraint {
+func NewStructConstraint(fields map[string]FieldConstraint) *StructConstraint {
 	return &StructConstraint{Fields: fields}
 }
 
@@ -338,21 +343,19 @@ func (c *StructConstraint) Validate(value interface{}) error {
 		return fmt.Errorf("type error: expected map[string]interface{} for struct validation, got %T", value)
 	}
 
-	// 遍历所有定义的字段验证器
-	for fieldName, fieldValidator := range c.Fields {
+	for fieldName, constraint := range c.Fields {
 		fieldValue, exists := mapValue[fieldName]
 
-		// 注意：此处的必填逻辑很简单。
-		// 一个更复杂的实现可能会有一个单独的 "Required" 约束，
-		// 而不是在这里假设所有字段都是必需的。
-		// 当前实现为了简单起见，假设如果字段在验证器中定义，它就是必需的。
-		if !exists {
+		// 如果字段是必填的，但值不存在，则报错
+		if constraint.Required && !exists {
 			return fmt.Errorf("missing required field: %s", fieldName)
 		}
 
-		// 验证字段值
-		if err := fieldValidator.Validate(fieldValue); err != nil {
-			return fmt.Errorf("field '%s' validation failed: %w", fieldName, err)
+		// 如果字段存在，或者是可选但提供了值，则验证
+		if exists {
+			if err := constraint.Validator.Validate(fieldValue); err != nil {
+				return fmt.Errorf("field '%s' validation failed: %w", fieldName, err)
+			}
 		}
 	}
 
