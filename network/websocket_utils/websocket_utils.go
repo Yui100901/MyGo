@@ -38,15 +38,6 @@ type WebSocket struct {
 	heartbeatMutex    sync.Mutex
 }
 
-// NewWebSocketByUpgrade 升级HTTP连接
-func NewWebSocketByUpgrade(w http.ResponseWriter, r *http.Request, responseHeader http.Header) (*WebSocket, error) {
-	conn, err := WSServer.Upgrade(w, r, responseHeader)
-	if err != nil {
-		return nil, fmt.Errorf("ws upgrade failed: %w", err)
-	}
-	return newWebSocket(conn), nil
-}
-
 // NewWebSocketByDial 主动建立连接
 func NewWebSocketByDial(url string, requestHeader http.Header) (*WebSocket, error) {
 	dialer := websocket.DefaultDialer
@@ -54,6 +45,15 @@ func NewWebSocketByDial(url string, requestHeader http.Header) (*WebSocket, erro
 	conn, _, err := dialer.Dial(url, requestHeader)
 	if err != nil {
 		return nil, fmt.Errorf("ws dial failed: %w", err)
+	}
+	return newWebSocket(conn), nil
+}
+
+// NewWebSocketByUpgrade 升级HTTP连接
+func NewWebSocketByUpgrade(w http.ResponseWriter, r *http.Request, responseHeader http.Header) (*WebSocket, error) {
+	conn, err := WSServer.Upgrade(w, r, responseHeader)
+	if err != nil {
+		return nil, fmt.Errorf("ws upgrade failed: %w", err)
 	}
 	return newWebSocket(conn), nil
 }
