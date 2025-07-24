@@ -36,6 +36,7 @@ type HostConfig struct {
 	AutoRemove      bool                     `json:"AutoRemove"`
 	Privileged      bool                     `json:"Privileged"`
 	PublishAllPorts bool                     `json:"PublishAllPorts"`
+	Runtime         string                   `json:"Runtime"`
 }
 
 // Config 定义 Config 结构体
