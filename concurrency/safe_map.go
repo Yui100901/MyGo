@@ -2,6 +2,7 @@ package concurrency
 
 import (
 	"fmt"
+	"hash/maphash"
 	"sync"
 )
 
@@ -11,6 +12,8 @@ import (
 //
 
 const defaultShardCount = 32
+
+var seed = maphash.MakeSeed()
 
 // SafeMap 使用分片锁的线程安全map
 type SafeMap[K comparable, V any] struct {
@@ -88,12 +91,46 @@ func (m *SafeMap[K, V]) GetOrElse(key K, fn func() V) V {
 	return fn()
 }
 
+func (m *SafeMap[K, V]) Update(key K, updater func(old V) V) {
+	shard := m.getShard(key)
+	m.locks[shard].Lock()
+	defer m.locks[shard].Unlock()
+	old, _ := m.maps[shard][key]
+	newVal := updater(old)
+	if newVal == nil {
+		delete(m.maps[shard], key)
+	} else {
+		m.maps[shard][key] = newVal
+	}
+}
+
+// Pop 返回并删除某个键
+func (m *SafeMap[K, V]) Pop(key K) (V, bool) {
+	shard := m.getShard(key)
+	m.locks[shard].Lock()
+	defer m.locks[shard].Unlock()
+	value, ok := m.maps[shard][key]
+	if ok {
+		delete(m.maps[shard], key)
+	}
+	return value, ok
+}
+
 // Delete 删除键对应的值
 func (m *SafeMap[K, V]) Delete(key K) {
 	shard := m.getShard(key)
 	m.locks[shard].Lock()
 	defer m.locks[shard].Unlock()
 	delete(m.maps[shard], key)
+}
+
+// Has 判断某个键是否存在
+func (m *SafeMap[K, V]) Has(key K) bool {
+	shard := m.getShard(key)
+	m.locks[shard].RLock()
+	defer m.locks[shard].RUnlock()
+	_, ok := m.maps[shard][key]
+	return ok
 }
 
 // Clear 清空map
@@ -175,17 +212,13 @@ func (m *SafeMap[K, V]) ToMap() map[K]V {
 
 // getShard 根据键获取对应的分片
 func (m *SafeMap[K, V]) getShard(key K) uint64 {
-	hash := fnv32(fmt.Sprintf("%v", key))
-	return uint64(hash) % m.shardCount
+	hash := hashKey(fmt.Sprintf("%v", key))
+	return hash % m.shardCount
 }
 
-func fnv32(key string) uint32 {
-	hash := uint32(2166136261)
-	const prime32 = uint32(16777619)
-	keyLength := len(key)
-	for i := 0; i < keyLength; i++ {
-		hash *= prime32
-		hash ^= uint32(key[i])
-	}
-	return hash
+func hashKey[K comparable](key K) uint64 {
+	var h maphash.Hash
+	h.SetSeed(seed)
+	fmt.Fprintf(&h, "%v", key)
+	return h.Sum64()
 }
