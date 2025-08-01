@@ -115,6 +115,10 @@ func NewConnection(w http.ResponseWriter) (*SSEConnection, error) {
 	}, nil
 }
 
+func (c *SSEConnection) Write(p []byte) (n int, err error) {
+	return c.w.Write(p)
+}
+
 // SendMessage 发送SSE消息
 func (c *SSEConnection) SendMessage(msg *SSEMessage) error {
 	data := msg.Encode()
