@@ -54,16 +54,16 @@ func NewSafeMapFromMap[K comparable, V any](m map[K]V, shardCount int) *SafeMap[
 func (m *SafeMap[K, V]) Set(key K, value V) {
 	shard := m.getShard(key)
 	m.locks[shard].Lock()
-	defer m.locks[shard].Unlock()
 	m.maps[shard][key] = value
+	m.locks[shard].Unlock()
 }
 
 // Get 获取键对应的值，不存在时返回nil
 func (m *SafeMap[K, V]) Get(key K) (V, bool) {
 	shard := m.getShard(key)
 	m.locks[shard].RLock()
-	defer m.locks[shard].RUnlock()
 	value, ok := m.maps[shard][key]
+	m.locks[shard].RUnlock()
 	return value, ok
 }
 
@@ -71,8 +71,8 @@ func (m *SafeMap[K, V]) Get(key K) (V, bool) {
 func (m *SafeMap[K, V]) GetOr(key K, dV V) V {
 	shard := m.getShard(key)
 	m.locks[shard].RLock()
-	defer m.locks[shard].RUnlock()
 	value, ok := m.maps[shard][key]
+	m.locks[shard].RUnlock()
 	if ok {
 		return value
 	}
@@ -83,36 +83,37 @@ func (m *SafeMap[K, V]) GetOr(key K, dV V) V {
 func (m *SafeMap[K, V]) GetOrElse(key K, fn func() V) V {
 	shard := m.getShard(key)
 	m.locks[shard].RLock()
-	defer m.locks[shard].RUnlock()
 	value, ok := m.maps[shard][key]
+	m.locks[shard].RUnlock()
 	if ok {
 		return value
 	}
 	return fn()
 }
 
-func (m *SafeMap[K, V]) Update(key K, updater func(old V) V) {
+// Update 更新某个键的值，当keep返回为false时删除该键
+func (m *SafeMap[K, V]) Update(key K, updater func(old V) (V, bool)) {
 	shard := m.getShard(key)
 	m.locks[shard].Lock()
-	defer m.locks[shard].Unlock()
 	old, _ := m.maps[shard][key]
-	newVal := updater(old)
-	if newVal == nil {
+	newVal, keep := updater(old)
+	if !keep {
 		delete(m.maps[shard], key)
 	} else {
 		m.maps[shard][key] = newVal
 	}
+	m.locks[shard].Unlock()
 }
 
 // Pop 返回并删除某个键
 func (m *SafeMap[K, V]) Pop(key K) (V, bool) {
 	shard := m.getShard(key)
 	m.locks[shard].Lock()
-	defer m.locks[shard].Unlock()
 	value, ok := m.maps[shard][key]
 	if ok {
 		delete(m.maps[shard], key)
 	}
+	m.locks[shard].Unlock()
 	return value, ok
 }
 
@@ -120,16 +121,16 @@ func (m *SafeMap[K, V]) Pop(key K) (V, bool) {
 func (m *SafeMap[K, V]) Delete(key K) {
 	shard := m.getShard(key)
 	m.locks[shard].Lock()
-	defer m.locks[shard].Unlock()
 	delete(m.maps[shard], key)
+	m.locks[shard].Unlock()
 }
 
 // Has 判断某个键是否存在
 func (m *SafeMap[K, V]) Has(key K) bool {
 	shard := m.getShard(key)
 	m.locks[shard].RLock()
-	defer m.locks[shard].RUnlock()
 	_, ok := m.maps[shard][key]
+	m.locks[shard].RUnlock()
 	return ok
 }
 
