@@ -194,6 +194,23 @@ func (m *SafeMap[K, V]) ForEach(fn func(K, V) bool) {
 	}
 }
 
+// ForEachAsync 并发遍历
+func (m *SafeMap[K, V]) ForEachAsync(fn func(K, V)) {
+	var wg sync.WaitGroup
+	for shard := range m.maps {
+		wg.Add(1)
+		go func(shard int) {
+			defer wg.Done()
+			m.locks[shard].RLock()
+			for k, v := range m.maps[shard] {
+				fn(k, v)
+			}
+			m.locks[shard].RUnlock()
+		}(shard)
+	}
+	wg.Wait()
+}
+
 // ToMap 将 SafeMap 转换为一个简单的 map
 func (m *SafeMap[K, V]) ToMap() map[K]V {
 	// 创建一个新的简单 map
