@@ -1,6 +1,7 @@
 package websocket_utils
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"github.com/gorilla/websocket"
@@ -25,10 +26,13 @@ const (
 )
 
 type WebSocket struct {
-	conn        *websocket.Conn
-	closeOnce   sync.Once
-	done        chan struct{}
-	writeMu     sync.Mutex
+	conn *websocket.Conn //底层连接
+
+	closeOnce sync.Once
+	ctx       context.Context
+	cancel    context.CancelFunc
+
+	writeMu     sync.Mutex    //写锁
 	readTimeout time.Duration // 可配置的读取超时
 	logger      *log.Logger   // 日志记录器
 
@@ -59,9 +63,11 @@ func NewWebSocketByUpgrade(w http.ResponseWriter, r *http.Request, responseHeade
 }
 
 func newWebSocket(conn *websocket.Conn) *WebSocket {
+	ctx, cancel := context.WithCancel(context.Background())
 	return &WebSocket{
 		conn:        conn,
-		done:        make(chan struct{}),
+		ctx:         ctx,
+		cancel:      cancel,
 		readTimeout: 0, // 默认无超时
 		logger:      log.New(os.Stdout, "[WS] ", log.LstdFlags),
 	}
@@ -123,7 +129,7 @@ func (ws *WebSocket) heartbeatLoop() {
 
 	for {
 		select {
-		case <-ws.done:
+		case <-ws.ctx.Done():
 			ws.logger.Printf("心跳协程退出 (Remote: %s)", ws.RemoteAddr())
 			return
 		case t := <-ws.heartbeatTicker.C:
@@ -163,7 +169,7 @@ func (ws *WebSocket) OnMessage(handleFunc func(messageType int, payload []byte))
 
 	for {
 		select {
-		case <-ws.done:
+		case <-ws.ctx.Done():
 			ws.logger.Printf("连接已关闭，停止接收消息 (Remote: %s)", ws.RemoteAddr())
 			return nil
 		default:
@@ -195,7 +201,7 @@ func (ws *WebSocket) SendMessage(messageType int, payload []byte) error {
 	defer ws.writeMu.Unlock()
 
 	select {
-	case <-ws.done:
+	case <-ws.ctx.Done():
 		ws.logger.Printf("尝试发送消息但连接已关闭 (Remote: %s)", ws.RemoteAddr())
 		return websocket.ErrCloseSent
 	default:
@@ -223,7 +229,7 @@ func (ws *WebSocket) safeClose() {
 		// 先停止心跳
 		ws.StopHeartbeat()
 
-		close(ws.done) // 通知所有消费者
+		ws.cancel() // 停止上下文
 
 		// 发送关闭帧
 		err := ws.conn.WriteControl(
@@ -247,11 +253,6 @@ func (ws *WebSocket) safeClose() {
 	})
 }
 
-// Done 获取关闭信号通道
-func (ws *WebSocket) Done() <-chan struct{} {
-	return ws.done
-}
-
 // RemoteAddr 获取对端地址
 func (ws *WebSocket) RemoteAddr() string {
 	return ws.conn.RemoteAddr().String()
@@ -265,7 +266,7 @@ func (ws *WebSocket) LocalAddr() string {
 // IsClosed 检查连接是否已关闭
 func (ws *WebSocket) IsClosed() bool {
 	select {
-	case <-ws.done:
+	case <-ws.ctx.Done():
 		return true
 	default:
 		return false
