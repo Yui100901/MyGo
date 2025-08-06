@@ -3,6 +3,7 @@ package mqtt_utils
 import (
 	"errors"
 	"fmt"
+	"github.com/Yui100901/MyGo/concurrency"
 	"log"
 	"os"
 	"sync"
@@ -25,11 +26,11 @@ type Subscription struct {
 
 type MQTTClient struct {
 	ClientId      string
-	subscriptions map[string]*Subscription // 订阅表，存储主题和订阅详情
-	client        mqtt.Client              // 客户端连接
-	stopChan      chan struct{}            // 停止信号
-	logger        *log.Logger              // 日志记录器
-	reconnectMu   sync.Mutex               // 重连操作锁
+	subscriptions *concurrency.SafeMap[string, *Subscription] // 订阅表，存储主题和订阅详情
+	client        mqtt.Client                                 // 客户端连接
+	stopChan      chan struct{}                               // 停止信号
+	logger        *log.Logger                                 // 日志记录器
+	reconnectMu   sync.Mutex                                  // 重连操作锁
 }
 
 type MQTTPublishRequest struct {
@@ -50,7 +51,7 @@ func NewMQTTPublishRequest(topic string, qos byte, retained bool, payload any) *
 
 func NewMQTTClient(config MQTTConfiguration) (*MQTTClient, error) {
 	c := &MQTTClient{
-		subscriptions: make(map[string]*Subscription),
+		subscriptions: concurrency.NewSafeMap[string, *Subscription](32),
 		stopChan:      make(chan struct{}),
 		logger:        log.New(os.Stdout, "[MQTT] ", log.LstdFlags),
 	}
@@ -124,18 +125,19 @@ func (c *MQTTClient) IsConnected() bool {
 
 // ResubscribeAll 重新订阅所有已注册的主题
 func (c *MQTTClient) ResubscribeAll() {
-	if len(c.subscriptions) == 0 {
+	if c.subscriptions.Length() == 0 {
 		return
 	}
 
 	// 准备批量订阅参数
-	topics := make(map[string]byte, len(c.subscriptions))
-	handlers := make(map[string]mqtt.MessageHandler, len(c.subscriptions))
+	topics := make(map[string]byte, c.subscriptions.Length())
+	handlers := make(map[string]mqtt.MessageHandler, c.subscriptions.Length())
 
-	for topic, sub := range c.subscriptions {
-		topics[topic] = sub.Qos
-		handlers[topic] = sub.Callback
-	}
+	c.subscriptions.ForEach(func(topic string, subscription *Subscription) bool {
+		topics[topic] = subscription.Qos
+		handlers[topic] = subscription.Callback
+		return true
+	})
 
 	// 执行批量订阅
 	if token := c.client.SubscribeMultiple(topics, func(client mqtt.Client, msg mqtt.Message) {
@@ -152,11 +154,11 @@ func (c *MQTTClient) ResubscribeAll() {
 // Subscribe 订阅单个主题
 func (c *MQTTClient) Subscribe(topic string, qos byte, callback mqtt.MessageHandler) {
 	// 更新订阅表
-	c.subscriptions[topic] = &Subscription{
+	c.subscriptions.Set(topic, &Subscription{
 		Topic:    topic,
 		Qos:      qos,
 		Callback: callback,
-	}
+	})
 
 	if c.IsConnected() {
 		if token := c.client.Subscribe(topic, qos, callback); token.Wait() && token.Error() != nil {
@@ -177,11 +179,11 @@ func (c *MQTTClient) SubscribeMultiple(subscriptions map[string]byte, callback m
 
 	// 更新订阅表
 	for topic, qos := range subscriptions {
-		c.subscriptions[topic] = &Subscription{
+		c.subscriptions.Set(topic, &Subscription{
 			Topic:    topic,
 			Qos:      qos,
 			Callback: callback,
-		}
+		})
 	}
 
 	if c.IsConnected() {
@@ -213,7 +215,7 @@ func (c *MQTTClient) Unsubscribe(topics ...string) {
 
 	// 更新订阅表
 	for _, topic := range topics {
-		delete(c.subscriptions, topic)
+		c.subscriptions.Delete(topic)
 	}
 
 	if c.IsConnected() {
@@ -229,7 +231,7 @@ func (c *MQTTClient) Unsubscribe(topics ...string) {
 
 // GetSubscription 获取主题的订阅详情
 func (c *MQTTClient) GetSubscription(topic string) (qos byte, callback mqtt.MessageHandler, exists bool) {
-	if sub, ok := c.subscriptions[topic]; ok {
+	if sub, ok := c.subscriptions.Get(topic); ok {
 		return sub.Qos, sub.Callback, true
 	}
 	return 0, nil, false
