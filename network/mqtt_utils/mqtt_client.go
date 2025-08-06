@@ -1,6 +1,7 @@
 package mqtt_utils
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"github.com/Yui100901/MyGo/concurrency"
@@ -28,9 +29,12 @@ type MQTTClient struct {
 	ClientId      string
 	subscriptions *concurrency.SafeMap[string, *Subscription] // 订阅表，存储主题和订阅详情
 	client        mqtt.Client                                 // 客户端连接
-	stopChan      chan struct{}                               // 停止信号
-	logger        *log.Logger                                 // 日志记录器
-	reconnectMu   sync.Mutex                                  // 重连操作锁
+
+	ctx    context.Context //上下文控制
+	cancel context.CancelFunc
+
+	logger      *log.Logger // 日志记录器
+	reconnectMu sync.Mutex  // 重连操作锁
 }
 
 type MQTTPublishRequest struct {
@@ -50,9 +54,11 @@ func NewMQTTPublishRequest(topic string, qos byte, retained bool, payload any) *
 }
 
 func NewMQTTClient(config MQTTConfiguration) (*MQTTClient, error) {
+	ctx, cancel := context.WithCancel(context.Background())
 	c := &MQTTClient{
 		subscriptions: concurrency.NewSafeMap[string, *Subscription](32),
-		stopChan:      make(chan struct{}),
+		ctx:           ctx,
+		cancel:        cancel,
 		logger:        log.New(os.Stdout, "[MQTT] ", log.LstdFlags),
 	}
 
@@ -104,7 +110,7 @@ func (c *MQTTClient) monitorConnection() {
 
 	for {
 		select {
-		case <-c.stopChan:
+		case <-c.ctx.Done():
 			return
 		case <-ticker.C:
 			if !c.client.IsConnected() {
@@ -258,7 +264,7 @@ func (c *MQTTClient) Publish(r *MQTTPublishRequest) error {
 
 // Disconnect 断开连接
 func (c *MQTTClient) Disconnect() {
-	close(c.stopChan)
+	c.cancel()
 	c.client.Disconnect(250) // 等待250ms完成操作
 	c.logger.Println("Disconnected from broker")
 }
