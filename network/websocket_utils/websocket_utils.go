@@ -13,11 +13,16 @@ import (
 )
 
 // WSServer 全局WebSocket升级器
-var WSServer = websocket.Upgrader{
+var WSServer = &websocket.Upgrader{
 	CheckOrigin: func(r *http.Request) bool {
 		// 生产环境应替换为实际源检查逻辑
 		return true
 	},
+}
+
+var DefaultDialer = &websocket.Dialer{
+	Proxy:            http.ProxyFromEnvironment,
+	HandshakeTimeout: 45 * time.Second,
 }
 
 const (
@@ -43,26 +48,30 @@ type WebSocket struct {
 }
 
 // NewWebSocketByDial 主动建立连接
-func NewWebSocketByDial(url string, requestHeader http.Header) (*WebSocket, error) {
-	dialer := websocket.DefaultDialer
-	dialer.HandshakeTimeout = 10 * time.Second // 添加握手超时
+func NewWebSocketByDial(dialer *websocket.Dialer, url string, requestHeader http.Header) (*WebSocket, error) {
+	if dialer == nil {
+		dialer = DefaultDialer
+	}
 	conn, _, err := dialer.Dial(url, requestHeader)
 	if err != nil {
 		return nil, fmt.Errorf("ws dial failed: %w", err)
 	}
-	return newWebSocket(conn), nil
+	return NewWebSocket(conn), nil
 }
 
 // NewWebSocketByUpgrade 升级HTTP连接
-func NewWebSocketByUpgrade(w http.ResponseWriter, r *http.Request, responseHeader http.Header) (*WebSocket, error) {
-	conn, err := WSServer.Upgrade(w, r, responseHeader)
+func NewWebSocketByUpgrade(upGrader *websocket.Upgrader, w http.ResponseWriter, r *http.Request, responseHeader http.Header) (*WebSocket, error) {
+	if upGrader == nil {
+		upGrader = WSServer
+	}
+	conn, err := upGrader.Upgrade(w, r, responseHeader)
 	if err != nil {
 		return nil, fmt.Errorf("ws upgrade failed: %w", err)
 	}
-	return newWebSocket(conn), nil
+	return NewWebSocket(conn), nil
 }
 
-func newWebSocket(conn *websocket.Conn) *WebSocket {
+func NewWebSocket(conn *websocket.Conn) *WebSocket {
 	ctx, cancel := context.WithCancel(context.Background())
 	return &WebSocket{
 		conn:        conn,
