@@ -4,10 +4,12 @@ import (
 	"bytes"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -83,10 +85,13 @@ func (sm *SSEMessage) Encode() []byte {
 
 // SSEConnection 表示单个SSE连接
 type SSEConnection struct {
-	w          http.ResponseWriter
-	flusher    http.Flusher
-	logger     *log.Logger
+	w       http.ResponseWriter
+	flusher http.Flusher
+	logger  *log.Logger
+
 	pingTicker *time.Ticker
+	writeMu    sync.Mutex // 并发安全
+	closeOnce  sync.Once
 }
 
 // NewConnection 创建新的SSE连接
@@ -121,6 +126,8 @@ func (c *SSEConnection) Write(p []byte) (n int, err error) {
 
 // SendMessage 发送SSE消息
 func (c *SSEConnection) SendMessage(msg *SSEMessage) error {
+	c.writeMu.Lock()
+
 	data := msg.Encode()
 	if _, err := c.w.Write(data); err != nil {
 		c.logger.Printf("发送消息失败: %v", err)
@@ -128,6 +135,8 @@ func (c *SSEConnection) SendMessage(msg *SSEMessage) error {
 	}
 	c.flusher.Flush()
 	c.logger.Printf("消息发送成功 (长度: %d字节)", len(data))
+
+	c.writeMu.Unlock()
 	return nil
 }
 
@@ -160,6 +169,18 @@ func (c *SSEConnection) StopHeartbeat() {
 
 // Close 关闭连接
 func (c *SSEConnection) Close() {
-	c.StopHeartbeat()
-	c.logger.Printf("连接已关闭")
+	c.closeOnce.Do(func() {
+		c.StopHeartbeat()
+
+		// 尝试关闭底层 TCP 连接
+		if hj, ok := c.w.(http.Hijacker); ok {
+			conn, _, err := hj.Hijack()
+			if err == nil {
+				_ = conn.Close()
+			}
+		} else if cn, ok := c.w.(net.Conn); ok {
+			_ = cn.Close()
+		}
+		c.logger.Println("连接已关闭")
+	})
 }
