@@ -61,8 +61,14 @@ func (s *Subscriber) HandleMessage(message *Message) {
 }
 
 func (s *Subscriber) processMessage(message *Message, handler MessageHandler) {
+	defer func() {
+		if err := recover(); err != nil {
+			s.logger.Printf("message id :%s topic:%s,handler got err:%s", message.ID, message.Topic, err)
+		}
+	}()
 	err := handler(context.Background(), message)
 	if err != nil {
+		s.logger.Printf("message id :%s topic:%s,handler got err:%s", message.ID, message.Topic, err)
 		return
 	}
 }
