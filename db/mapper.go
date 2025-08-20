@@ -17,7 +17,7 @@ type Mapper[T Model] struct {
 
 func NewMapper[T Model]() *Mapper[T] {
 	return &Mapper[T]{
-		db: Connect(""),
+		db: InitDB(SQLITE, "test.db"),
 	}
 }
 
