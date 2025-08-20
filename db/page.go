@@ -32,18 +32,3 @@ func Paginate[T any](records []*T, total int64, current int, pageSize int) *Page
 		TotalPages: totalPages,
 	}
 }
-
-// IsEmpty 判断是否为空页
-func (p *Page[T]) IsEmpty() bool {
-	return len(p.Records) == 0
-}
-
-// IsFirst 判断是否为第一页
-func (p *Page[T]) IsFirst() bool {
-	return p.Current == 1
-}
-
-// IsLast 判断是否为最后一页
-func (p *Page[T]) IsLast() bool {
-	return int64(p.Current) >= p.TotalPages
-}
