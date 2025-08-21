@@ -9,19 +9,17 @@ import (
 // @Date 2025/7/21 15 32
 //
 
+type Model interface {
+	TableName() string
+}
+
 // Mapper 通用数据访问层
 type Mapper[T Model] struct {
 	db    *gorm.DB
 	model T
 }
 
-func NewMapper[T Model]() *Mapper[T] {
-	return &Mapper[T]{
-		db: InitDB(SQLITE, "test.db"),
-	}
-}
-
-func NewMapperWithDB[T Model](db *gorm.DB) *Mapper[T] {
+func NewMapper[T Model](db *gorm.DB) *Mapper[T] {
 	return &Mapper[T]{
 		db: db,
 	}
@@ -35,7 +33,7 @@ func (m *Mapper[T]) GetDB() *gorm.DB {
 // Transaction 执行事务
 func (m *Mapper[T]) Transaction(fn func(tx *Mapper[T]) error) error {
 	return m.db.Transaction(func(tx *gorm.DB) error {
-		mapper := NewMapperWithDB[T](tx)
+		mapper := NewMapper[T](tx)
 		return fn(mapper)
 	})
 }
