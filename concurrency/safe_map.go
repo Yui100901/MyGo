@@ -67,6 +67,17 @@ func (m *SafeMap[K, V]) Get(key K) (V, bool) {
 	return value, ok
 }
 
+func (m *SafeMap[K, V]) MustGet(key K) V {
+	shard := m.getShard(key)
+	m.locks[shard].RLock()
+	value, ok := m.maps[shard][key]
+	m.locks[shard].RUnlock()
+	if !ok {
+		panic(fmt.Sprintf("SafeMap MustGet: key %v 不存在", key))
+	}
+	return value
+}
+
 // GetOr 获取键对应的值，不存在时返回给定的默认值
 func (m *SafeMap[K, V]) GetOr(key K, dV V) V {
 	shard := m.getShard(key)
