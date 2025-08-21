@@ -33,6 +33,7 @@ const (
 type WebSocket struct {
 	conn *websocket.Conn //底层连接
 
+	//生命周期
 	closeOnce sync.Once
 	ctx       context.Context
 	cancel    context.CancelFunc

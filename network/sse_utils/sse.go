@@ -1,6 +1,7 @@
 package sse_utils
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"net"
@@ -12,18 +13,23 @@ import (
 
 //
 // @Author yfy2001
-// @Date 2025/4/9 15 30
+// @Date 2025/4/9 15:30
 //
 
 // SSEConnection 表示单个SSE连接
 type SSEConnection struct {
 	w       http.ResponseWriter
 	flusher http.Flusher
-	logger  *log.Logger
 
-	pingTicker *time.Ticker
-	writeMu    sync.Mutex // 并发安全
-	closeOnce  sync.Once
+	// 生命周期控制
+	closeOnce sync.Once
+	ctx       context.Context
+	cancel    context.CancelFunc
+
+	writeMu sync.Mutex  // 写锁，保证消息写入的并发安全
+	logger  *log.Logger // 日志
+
+	heartbeatTicker *time.Ticker // 心跳定时器
 }
 
 // NewConnection 创建新的SSE连接
@@ -45,20 +51,33 @@ func NewConnection(w http.ResponseWriter) (*SSEConnection, error) {
 	}
 	flusher.Flush()
 
+	ctx, cancel := context.WithCancel(context.Background())
 	return &SSEConnection{
-		w:       w,
-		flusher: flusher,
-		logger:  log.New(os.Stdout, "[SSE] ", log.LstdFlags),
+		w:         w,
+		flusher:   flusher,
+		closeOnce: sync.Once{},
+		ctx:       ctx,
+		cancel:    cancel,
+		logger:    log.New(os.Stdout, "[SSE] ", log.LstdFlags),
 	}, nil
 }
 
+// Write 实现 io.Writer 接口
 func (c *SSEConnection) Write(p []byte) (n int, err error) {
 	return c.w.Write(p)
 }
 
 // SendMessage 发送SSE消息
 func (c *SSEConnection) SendMessage(msg *SSEMessage) error {
+	// 如果上下文已取消，直接返回错误
+	select {
+	case <-c.ctx.Done():
+		return fmt.Errorf("连接已关闭，无法发送消息")
+	default:
+	}
+
 	c.writeMu.Lock()
+	defer c.writeMu.Unlock()
 
 	data := msg.Encode()
 	if _, err := c.w.Write(data); err != nil {
@@ -67,52 +86,60 @@ func (c *SSEConnection) SendMessage(msg *SSEMessage) error {
 	}
 	c.flusher.Flush()
 	c.logger.Printf("消息发送成功 (长度: %d字节)", len(data))
-
-	c.writeMu.Unlock()
 	return nil
 }
 
 // StartHeartbeat 启动心跳机制
 func (c *SSEConnection) StartHeartbeat(interval time.Duration) {
-	if c.pingTicker != nil {
-		c.pingTicker.Stop()
+	if c.heartbeatTicker != nil {
+		c.heartbeatTicker.Stop()
 	}
 
-	c.pingTicker = time.NewTicker(interval)
+	c.heartbeatTicker = time.NewTicker(interval)
 	go func() {
-		for range c.pingTicker.C {
-			if _, err := c.w.Write([]byte(":\n\n")); err != nil {
-				c.logger.Printf("心跳发送失败: %v", err)
+		defer c.heartbeatTicker.Stop()
+		for {
+			select {
+			case <-c.ctx.Done():
+				c.logger.Println("心跳协程退出")
 				return
+			case <-c.heartbeatTicker.C:
+				if _, err := c.w.Write([]byte(":\n\n")); err != nil {
+					c.logger.Printf("心跳发送失败: %v", err)
+					c.Close()
+					return
+				}
+				c.flusher.Flush()
+				c.logger.Printf("心跳已发送")
 			}
-			c.flusher.Flush()
-			c.logger.Printf("心跳已发送")
 		}
 	}()
 }
 
 // StopHeartbeat 停止心跳
 func (c *SSEConnection) StopHeartbeat() {
-	if c.pingTicker != nil {
-		c.pingTicker.Stop()
-		c.pingTicker = nil
+	if c.heartbeatTicker != nil {
+		c.heartbeatTicker.Stop()
+		c.heartbeatTicker = nil
 	}
 }
 
 // Close 关闭连接
 func (c *SSEConnection) Close() {
 	c.closeOnce.Do(func() {
+		// 通知所有监听 ctx 的协程退出
+		c.cancel()
 		c.StopHeartbeat()
 
 		// 尝试关闭底层 TCP 连接
 		if hj, ok := c.w.(http.Hijacker); ok {
-			conn, _, err := hj.Hijack()
-			if err == nil {
+			if conn, _, err := hj.Hijack(); err == nil {
 				_ = conn.Close()
 			}
 		} else if cn, ok := c.w.(net.Conn); ok {
 			_ = cn.Close()
 		}
+
 		c.logger.Println("连接已关闭")
 	})
 }
