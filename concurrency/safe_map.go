@@ -248,6 +248,13 @@ func (m *SafeMap[K, V]) getShard(key K) uint64 {
 func hashKey[K comparable](key K) uint64 {
 	var h maphash.Hash
 	h.SetSeed(seed)
-	fmt.Fprintf(&h, "%v", key)
+	switch v := any(key).(type) {
+	case string:
+		h.WriteString(v)
+	case []byte:
+		h.Write(v)
+	default:
+		fmt.Fprintf(&h, "%v", v) // fallback
+	}
 	return h.Sum64()
 }
