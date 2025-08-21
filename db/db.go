@@ -37,21 +37,22 @@ var drivers = map[DatabaseType]func(dsn string) gorm.Dialector{
 	POSTGRES:  postgres.Open,
 }
 
-// InitDB 初始化数据库（单例）
-func InitDB(name string, dbType DatabaseType, dsn string) *gorm.DB {
+// GetOrInitDB 初始化数据库（单例）
+func GetOrInitDB(name string, dbType DatabaseType, dsn string) (*gorm.DB, error) {
 	if db, ok := dbMap.Get(name); ok {
-		return db
+		return db, nil
 	}
+	logger.Printf("%s not found,try connect:type:%s,dsn:%s", name, dbType, dsn)
 	dialect, ok := drivers[dbType]
 	if !ok {
-		panic(fmt.Sprintf("unsupported database type: %s", dbType))
+		return nil, fmt.Errorf("unsupported database type: %s", dbType)
 	}
 	db, err := connectDB(dialect(dsn), string(dbType))
 	if err != nil {
-		panic(fmt.Sprintf("failed to initialize database: %v", err))
+		return nil, fmt.Errorf("failed to initialize database: %w", err)
 	}
 	dbMap.Set(name, db)
-	return db
+	return db, nil
 }
 
 // RegisterDB 直接注册已有 *gorm.DB（不走 InitDB 流程）
@@ -62,21 +63,6 @@ func RegisterDB(name string, db *gorm.DB) error {
 	dbMap.Set(name, db)
 	logger.Printf("Registered existing DB %s", name)
 	return nil
-}
-
-// GetDB 获取数据库连接（存在才返回，否则报错）
-func GetDB(name string) (*gorm.DB, error) {
-	db, ok := dbMap.Get(name)
-	if !ok {
-		return nil, fmt.Errorf("no DB found for name: %s", name)
-	}
-	return db, nil
-}
-
-// MustGetDB 获取数据库连接（不存在直接 panic，适合初始化期）
-func MustGetDB(name string) *gorm.DB {
-	db := dbMap.MustGet(name)
-	return db
 }
 
 // 统一连接函数 + 连接池配置
