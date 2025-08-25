@@ -56,3 +56,17 @@ func TestSafeMap_GetOr(t *testing.T) {
 	})
 	t.Log(v)
 }
+
+func TestSafeMap_MustGet(t *testing.T) {
+	m := NewSafeMap[string, string](32)
+	m.Set("foo", "bar")
+	m.Set("foo1", "bar1")
+	v := m.MustGet("foo2")
+	t.Log(v)
+	v = m.GetOr("b", "b")
+	t.Log(v)
+	v = m.GetOrElse("a", func() string {
+		return "a"
+	})
+	t.Log(v)
+}

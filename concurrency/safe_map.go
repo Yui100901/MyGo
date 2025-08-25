@@ -73,7 +73,7 @@ func (m *SafeMap[K, V]) MustGet(key K) V {
 	value, ok := m.maps[shard][key]
 	m.locks[shard].RUnlock()
 	if !ok {
-		panic(fmt.Sprintf("SafeMap MustGet: key %v 不存在", key))
+		panic(fmt.Sprintf("SafeMap MustGet: key %v not exists", key))
 	}
 	return value
 }
