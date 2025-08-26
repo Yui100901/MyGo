@@ -44,9 +44,7 @@ func NewSafeMap[K comparable, V any](shardCount int) *SafeMap[K, V] {
 // NewSafeMapFromMap 将普通map转换为ConcurrentMap
 func NewSafeMapFromMap[K comparable, V any](m map[K]V, shardCount int) *SafeMap[K, V] {
 	safeMap := NewSafeMap[K, V](shardCount)
-	for k, v := range m {
-		safeMap.Set(k, v)
-	}
+	safeMap.SetBatch(m)
 	return safeMap
 }
 
@@ -58,6 +56,85 @@ func (m *SafeMap[K, V]) Set(key K, value V) {
 	m.locks[shard].Unlock()
 }
 
+// SetBatch 批量设置键值对
+func (m *SafeMap[K, V]) SetBatch(pairs map[K]V) {
+	// 按分片分组数据
+	shardData := make([]map[K]V, m.shardCount)
+	for i := range shardData {
+		shardData[i] = make(map[K]V)
+	}
+
+	// 将数据分配到对应的分片
+	for k, v := range pairs {
+		shard := m.getShard(k)
+		shardData[shard][k] = v
+	}
+
+	// 并发处理每个分片
+	var wg sync.WaitGroup
+	for shard := uint64(0); shard < m.shardCount; shard++ {
+		if len(shardData[shard]) == 0 {
+			continue
+		}
+
+		wg.Add(1)
+		go func(shardIndex uint64, data map[K]V) {
+			defer wg.Done()
+			m.locks[shardIndex].Lock()
+			for k, v := range data {
+				m.maps[shardIndex][k] = v
+			}
+			m.locks[shardIndex].Unlock()
+		}(shard, shardData[shard])
+	}
+	wg.Wait()
+}
+
+// SetBatchSlice 批量设置键值对（切片形式）
+func (m *SafeMap[K, V]) SetBatchSlice(keys []K, values []V) error {
+	if len(keys) != len(values) {
+		return fmt.Errorf("keys and values length mismatch: %d vs %d", len(keys), len(values))
+	}
+
+	// 按分片分组数据
+	shardData := make([][]struct {
+		key   K
+		value V
+	}, m.shardCount)
+
+	// 将数据分配到对应的分片
+	for i, key := range keys {
+		shard := m.getShard(key)
+		shardData[shard] = append(shardData[shard], struct {
+			key   K
+			value V
+		}{key, values[i]})
+	}
+
+	// 并发处理每个分片
+	var wg sync.WaitGroup
+	for shard := uint64(0); shard < m.shardCount; shard++ {
+		if len(shardData[shard]) == 0 {
+			continue
+		}
+
+		wg.Add(1)
+		go func(shardIndex uint64, data []struct {
+			key   K
+			value V
+		}) {
+			defer wg.Done()
+			m.locks[shardIndex].Lock()
+			for _, item := range data {
+				m.maps[shardIndex][item.key] = item.value
+			}
+			m.locks[shardIndex].Unlock()
+		}(shard, shardData[shard])
+	}
+	wg.Wait()
+	return nil
+}
+
 // Get 获取键对应的值，不存在时返回nil
 func (m *SafeMap[K, V]) Get(key K) (V, bool) {
 	shard := m.getShard(key)
@@ -65,6 +142,52 @@ func (m *SafeMap[K, V]) Get(key K) (V, bool) {
 	value, ok := m.maps[shard][key]
 	m.locks[shard].RUnlock()
 	return value, ok
+}
+
+// GetBatch 批量获取键对应的值
+func (m *SafeMap[K, V]) GetBatch(keys []K) map[K]V {
+	result := make(map[K]V, len(keys))
+
+	// 按分片分组键
+	shardKeys := make([][]K, m.shardCount)
+	for _, key := range keys {
+		shard := m.getShard(key)
+		shardKeys[shard] = append(shardKeys[shard], key)
+	}
+
+	// 并发处理每个分片
+	var mu sync.Mutex
+	var wg sync.WaitGroup
+
+	for shard := uint64(0); shard < m.shardCount; shard++ {
+		if len(shardKeys[shard]) == 0 {
+			continue
+		}
+
+		wg.Add(1)
+		go func(shardIndex uint64, keys []K) {
+			defer wg.Done()
+			m.locks[shardIndex].RLock()
+
+			shardResult := make(map[K]V)
+			for _, key := range keys {
+				if value, ok := m.maps[shardIndex][key]; ok {
+					shardResult[key] = value
+				}
+			}
+			m.locks[shardIndex].RUnlock()
+
+			// 合并结果需要加锁
+			mu.Lock()
+			for k, v := range shardResult {
+				result[k] = v
+			}
+			mu.Unlock()
+		}(shard, shardKeys[shard])
+	}
+	wg.Wait()
+
+	return result
 }
 
 func (m *SafeMap[K, V]) MustGet(key K) V {
@@ -116,6 +239,46 @@ func (m *SafeMap[K, V]) Update(key K, updater func(old V) (V, bool)) {
 	m.locks[shard].Unlock()
 }
 
+// UpdateBatch 批量更新键值对
+func (m *SafeMap[K, V]) UpdateBatch(updates map[K]func(V) (V, bool)) {
+	// 按分片分组更新操作
+	shardUpdates := make([]map[K]func(V) (V, bool), m.shardCount)
+	for i := range shardUpdates {
+		shardUpdates[i] = make(map[K]func(V) (V, bool))
+	}
+
+	// 将更新操作分配到对应的分片
+	for k, updateFn := range updates {
+		shard := m.getShard(k)
+		shardUpdates[shard][k] = updateFn
+	}
+
+	// 并发处理每个分片
+	var wg sync.WaitGroup
+	for shard := uint64(0); shard < m.shardCount; shard++ {
+		if len(shardUpdates[shard]) == 0 {
+			continue
+		}
+
+		wg.Add(1)
+		go func(shardIndex uint64, updates map[K]func(V) (V, bool)) {
+			defer wg.Done()
+			m.locks[shardIndex].Lock()
+			for key, updateFn := range updates {
+				old, _ := m.maps[shardIndex][key]
+				newVal, keep := updateFn(old)
+				if !keep {
+					delete(m.maps[shardIndex], key)
+				} else {
+					m.maps[shardIndex][key] = newVal
+				}
+			}
+			m.locks[shardIndex].Unlock()
+		}(shard, shardUpdates[shard])
+	}
+	wg.Wait()
+}
+
 // Pop 返回并删除某个键
 func (m *SafeMap[K, V]) Pop(key K) (V, bool) {
 	shard := m.getShard(key)
@@ -134,6 +297,35 @@ func (m *SafeMap[K, V]) Delete(key K) {
 	m.locks[shard].Lock()
 	delete(m.maps[shard], key)
 	m.locks[shard].Unlock()
+}
+
+// DeleteBatch 批量删除键
+func (m *SafeMap[K, V]) DeleteBatch(keys []K) {
+	// 按分片分组键
+	shardKeys := make([][]K, m.shardCount)
+	for _, key := range keys {
+		shard := m.getShard(key)
+		shardKeys[shard] = append(shardKeys[shard], key)
+	}
+
+	// 并发处理每个分片
+	var wg sync.WaitGroup
+	for shard := uint64(0); shard < m.shardCount; shard++ {
+		if len(shardKeys[shard]) == 0 {
+			continue
+		}
+
+		wg.Add(1)
+		go func(shardIndex uint64, keys []K) {
+			defer wg.Done()
+			m.locks[shardIndex].Lock()
+			for _, key := range keys {
+				delete(m.maps[shardIndex], key)
+			}
+			m.locks[shardIndex].Unlock()
+		}(shard, shardKeys[shard])
+	}
+	wg.Wait()
 }
 
 // Has 判断某个键是否存在
