@@ -1,4 +1,4 @@
-package bit
+package bit_utils
 
 import "testing"
 
