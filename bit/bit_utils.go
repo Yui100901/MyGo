@@ -115,7 +115,7 @@ func (b *BitArray) SetBit(index int) {
 	}
 
 	byteIndex := index >> 3
-	// 统一位偏移计算方式
+	// 修正：统一位偏移计算方式
 	b.data[byteIndex] |= 1 << uint(7-(index&7))
 }
 
@@ -126,7 +126,7 @@ func (b *BitArray) ClearBit(index int) {
 	}
 
 	byteIndex := index >> 3
-	// 统一位偏移计算方式
+	// 修正：统一位偏移计算方式
 	b.data[byteIndex] &^= 1 << uint(7-(index&7))
 }
 
@@ -137,7 +137,7 @@ func (b *BitArray) Get(index int) byte {
 	}
 
 	byteIndex := index >> 3
-	// 统一位偏移计算方式
+	// 修正：统一位偏移计算方式
 	return (b.data[byteIndex] >> uint(7-(index&7))) & 1
 }
 
@@ -193,7 +193,7 @@ func (b *BitArray) Count() int {
 		}
 	}
 
-	// 处理最后一个字节的多余位
+	// 修正：需要处理最后一个字节的多余位
 	if remainder := b.bitLen & 7; remainder > 0 && len(b.data) > 0 {
 		lastByte := b.data[len(b.data)-1]
 		// 计算多余位中1的个数并减去
@@ -264,6 +264,8 @@ func (b *BitArray) Equals(other *BitArray) bool {
 	return true
 }
 
+// 新增一些实用方法
+
 // SetRange 设置指定范围的位为 1
 func (b *BitArray) SetRange(start, length int) {
 	if start < 0 || length < 0 || start+length > b.bitLen {
@@ -322,5 +324,93 @@ func (b *BitArray) Xor(other *BitArray) *BitArray {
 	for i := 0; i < len(b.data); i++ {
 		result.data[i] = b.data[i] ^ other.data[i]
 	}
+	return result
+}
+
+// Append 将另一个位数组追加到当前位数组末尾，返回新的位数组
+func (b *BitArray) Append(other *BitArray) *BitArray {
+	if other == nil || other.bitLen == 0 {
+		return b.Clone()
+	}
+	if b.bitLen == 0 {
+		return other.Clone()
+	}
+
+	totalLength := b.bitLen + other.bitLen
+	result := NewBitArray(totalLength)
+
+	// 复制第一个位数组
+	for i := 0; i < b.bitLen; i++ {
+		if b.Get(i) == 1 {
+			result.SetBit(i)
+		}
+	}
+
+	// 复制第二个位数组
+	for i := 0; i < other.bitLen; i++ {
+		if other.Get(i) == 1 {
+			result.SetBit(b.bitLen + i)
+		}
+	}
+
+	return result
+}
+
+// Concat 将多个位数组拼接成一个新的位数组
+func Concat(arrays ...*BitArray) *BitArray {
+	if len(arrays) == 0 {
+		return NewBitArray(0)
+	}
+
+	// 计算总长度
+	totalLength := 0
+	for _, arr := range arrays {
+		if arr != nil {
+			totalLength += arr.bitLen
+		}
+	}
+
+	if totalLength == 0 {
+		return NewBitArray(0)
+	}
+
+	result := NewBitArray(totalLength)
+	currentPos := 0
+
+	// 依次复制每个数组
+	for _, arr := range arrays {
+		if arr == nil || arr.bitLen == 0 {
+			continue
+		}
+
+		for i := 0; i < arr.bitLen; i++ {
+			if arr.Get(i) == 1 {
+				result.SetBit(currentPos + i)
+			}
+		}
+		currentPos += arr.bitLen
+	}
+
+	return result
+}
+
+// Slice 返回位数组的子切片，类似切片操作 [start:end)
+func (b *BitArray) Slice(start, end int) *BitArray {
+	if start < 0 || end < start || end > b.bitLen {
+		panic("invalid slice range")
+	}
+
+	length := end - start
+	if length == 0 {
+		return NewBitArray(0)
+	}
+
+	result := NewBitArray(length)
+	for i := 0; i < length; i++ {
+		if b.Get(start+i) == 1 {
+			result.SetBit(i)
+		}
+	}
+
 	return result
 }
