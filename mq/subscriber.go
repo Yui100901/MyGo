@@ -39,7 +39,7 @@ func NewSubscriber(id string) *Subscriber {
 	subscriber := &Subscriber{
 		id:            id,
 		subscriptions: concurrency.NewSafeMap[Topic, *TopicSubscription](32),
-		logger:        log.New(os.Stdout, "[MQ-Subscriber ]", log.LstdFlags|log.Lshortfile),
+		logger:        log.New(os.Stdout, "[MQ-Subscriber] ", log.LstdFlags|log.Lshortfile),
 	}
 
 	log.Printf("Subscriber %s", subscriber.id)

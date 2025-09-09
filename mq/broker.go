@@ -68,7 +68,7 @@ func NewMessageBroker(config *BrokerConfig) *MessageBroker {
 		deliveryTimers:      concurrency.NewSafeMap[string, *time.Timer](32),
 		ctx:                 ctx,
 		cancel:              cancel,
-		logger:              log.New(os.Stdout, "[MQ-Broker]", log.LstdFlags),
+		logger:              log.New(os.Stdout, "[MQ-Broker] ", log.LstdFlags),
 	}
 
 	log.Printf("Message broker created with config: MaxConcurrency=%d, QueueSize=%d",
@@ -81,8 +81,6 @@ func (b *MessageBroker) Start() error {
 	if !atomic.CompareAndSwapInt32(&b.running, 0, 1) {
 		return errors.New("broker is already running")
 	}
-
-	b.logger.Printf("Starting message broker with %d worker goroutines", b.config.MaxConcurrency)
 
 	// 启动消息分发协程池
 	for i := 0; i < b.config.MaxConcurrency; i++ {

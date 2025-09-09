@@ -24,8 +24,7 @@ func TestMQ(t *testing.T) {
 			return nil
 		},
 	})
-	b.Publish(
-		NewMessage("test", []byte("hello world")))
+	b.Publish(NewMessage("test", []byte("hello world")))
 	time.Sleep(20 * time.Second)
 	b.Stop()
 
