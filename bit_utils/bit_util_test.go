@@ -20,3 +20,14 @@ func TestBinary(t *testing.T) {
 	data := []byte{0b1010, 0b11}
 	t.Log(len(data))
 }
+
+func TestConcat(t *testing.T) {
+	var bitArrList []*BitArray
+	for i := 0; i < 10; i++ {
+		bitArr, _ := NewBitArray(2)
+		bitArr.SetByte(0, 0b01000010)
+		bitArrList = append(bitArrList, bitArr)
+	}
+	bitArr, _ := Concat(bitArrList...)
+	t.Log(bitArr)
+}

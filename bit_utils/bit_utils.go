@@ -3,6 +3,7 @@ package bit_utils
 import "errors"
 
 // BitArray 表示一个位数组，使用紧凑存储
+// 使用高位对齐
 type BitArray struct {
 	bitLen int
 	data   []byte
@@ -474,8 +475,8 @@ func Concat(arrays ...*BitArray) (*BitArray, error) {
 	return result, nil
 }
 
-// Slice 返回位数组的子切片 [start:end)
-func (b *BitArray) Slice(start, end int) (*BitArray, error) {
+// SliceBit 返回位数组的子切片 [start:end)
+func (b *BitArray) SliceBit(start, end int) (*BitArray, error) {
 	if start < 0 || end < start || end > b.bitLen {
 		return nil, errors.New("invalid slice range")
 	}
