@@ -17,7 +17,7 @@ func TestBind(t *testing.T) {
 	payload, _ := os.Open("hello.zip")
 	defer payload.Close()
 
-	binder := NewBind()
+	binder := &Bind{}
 	embed, err := binder.Embed(carrier, payload)
 	if err != nil {
 		return
