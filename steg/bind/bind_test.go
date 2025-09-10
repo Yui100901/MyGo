@@ -17,13 +17,13 @@ func TestBind(t *testing.T) {
 	payload, _ := os.Open("hello.zip")
 	defer payload.Close()
 
-	binder := NewBind("png")
+	binder := NewBind()
 	embed, err := binder.Embed(carrier, payload)
 	if err != nil {
 		return
 	}
 	// 保存嵌入后的图像为 embedded.png
-	outFile, err := os.Create("embedded." + binder.carrierFormat)
+	outFile, err := os.Create("embedded." + "png")
 	if err != nil {
 		panic(fmt.Errorf("输出文件创建失败: %v", err))
 	}
