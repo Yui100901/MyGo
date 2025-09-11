@@ -20,8 +20,10 @@ type HTTPResult struct {
 }
 
 func (r *HTTPResult) ReadBodyBytes() ([]byte, error) {
-	if r.response.Body != nil {
-		defer r.response.Body.Close()
+	if r.response != nil {
+		if r.response.Body != nil {
+			defer r.response.Body.Close()
+		}
 	} else {
 		return nil, fmt.Errorf("nil response body")
 	}
