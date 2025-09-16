@@ -328,6 +328,27 @@ func (m *SafeMap[K, V]) DeleteBatch(keys []K) {
 	wg.Wait()
 }
 
+// DeleteIf 根据传入的判断函数删除满足条件的键值对
+func (m *SafeMap[K, V]) DeleteIf(predicate func(K, V) bool) {
+	var wg sync.WaitGroup
+
+	for shard := range m.maps {
+		wg.Add(1)
+		go func(shardIndex int) {
+			defer wg.Done()
+			m.locks[shardIndex].Lock()
+			for k, v := range m.maps[shardIndex] {
+				if predicate(k, v) {
+					delete(m.maps[shardIndex], k)
+				}
+			}
+			m.locks[shardIndex].Unlock()
+		}(shard)
+	}
+
+	wg.Wait()
+}
+
 // Has 判断某个键是否存在
 func (m *SafeMap[K, V]) Has(key K) bool {
 	shard := m.getShard(key)
