@@ -20,8 +20,8 @@ type SafeBiMap[K comparable, V comparable] struct {
 	mu       sync.RWMutex   // 全局锁，用于保证双向映射的原子性
 }
 
-// NewSafeBiMapV2 创建一个新的基于SafeMap的双向map
-func NewSafeBiMapV2[K comparable, V comparable](shardCount int) *SafeBiMap[K, V] {
+// NewSafeBiMap 创建一个新的基于SafeMap的双向map
+func NewSafeBiMap[K comparable, V comparable](shardCount int) *SafeBiMap[K, V] {
 	if shardCount <= 0 {
 		shardCount = defaultShardCount
 	}
@@ -32,8 +32,8 @@ func NewSafeBiMapV2[K comparable, V comparable](shardCount int) *SafeBiMap[K, V]
 	}
 }
 
-// NewSafeBiMapV2FromMap 从普通map创建双向map
-func NewSafeBiMapV2FromMap[K comparable, V comparable](m map[K]V, shardCount int) (*SafeBiMap[K, V], error) {
+// NewSafeBiMapFromMap 从普通map创建双向map
+func NewSafeBiMapFromMap[K comparable, V comparable](m map[K]V, shardCount int) (*SafeBiMap[K, V], error) {
 	// 检查值是否有重复
 	valueSet := make(map[V]bool)
 	for _, v := range m {
@@ -43,7 +43,7 @@ func NewSafeBiMapV2FromMap[K comparable, V comparable](m map[K]V, shardCount int
 		valueSet[v] = true
 	}
 
-	biMap := NewSafeBiMapV2[K, V](shardCount)
+	biMap := NewSafeBiMap[K, V](shardCount)
 
 	// 批量设置，利用SafeMap的批量操作
 	forwardMap := make(map[K]V)
@@ -281,7 +281,7 @@ func (b *SafeBiMap[K, V]) Clone() *SafeBiMap[K, V] {
 	defer b.mu.RUnlock()
 
 	forwardMap := b.forward.ToMap()
-	clone, _ := NewSafeBiMapV2FromMap(forwardMap, int(b.forward.shardCount))
+	clone, _ := NewSafeBiMapFromMap(forwardMap, int(b.forward.shardCount))
 	return clone
 }
 
