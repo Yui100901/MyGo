@@ -30,8 +30,10 @@ type MQTTClient struct {
 	subscriptions *concurrency.SafeMap[string, *Subscription] // 订阅表，存储主题和订阅详情
 	client        mqtt.Client                                 // 客户端连接
 
-	ctx    context.Context //上下文控制
-	cancel context.CancelFunc
+	// 生命周期
+	closeOnce sync.Once
+	ctx       context.Context
+	cancel    context.CancelFunc
 
 	logger      *log.Logger // 日志记录器
 	reconnectMu sync.Mutex  // 重连操作锁
@@ -264,9 +266,15 @@ func (c *MQTTClient) Publish(r *MQTTPublishRequest) error {
 
 // Disconnect 断开连接
 func (c *MQTTClient) Disconnect() {
-	c.cancel()
-	c.client.Disconnect(250) // 等待250ms完成操作
 	c.logger.Println("Disconnected from broker")
+	c.safeClose()
+}
+
+func (c *MQTTClient) safeClose() {
+	c.closeOnce.Do(func() {
+		c.cancel()
+		c.client.Disconnect(250) // 等待250ms完成操作
+	})
 }
 
 func (c *MQTTClient) OnConnectHandler(client mqtt.Client) {

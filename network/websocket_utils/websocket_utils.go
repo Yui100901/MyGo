@@ -31,7 +31,7 @@ const (
 )
 
 type WebSocket struct {
-	conn        *websocket.Conn //底层连接
+	conn        *websocket.Conn // 底层连接
 	readTimeout time.Duration   // 可配置的读取超时
 
 	//生命周期
