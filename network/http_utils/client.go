@@ -108,7 +108,7 @@ func (c *HTTPClient) EnableConnectionPool(maxIdle, maxIdlePerHost int) {
 }
 
 // Do 执行HTTP请求
-func (c *HTTPClient) Do(req *http.Request) *HTTPResult {
+func (c *HTTPClient) Do(req *http.Request) (*http.Response, error) {
 	start := time.Now()
 	Logger.Printf("开始请求: %s %s", req.Method, req.URL.String())
 
@@ -121,9 +121,8 @@ func (c *HTTPClient) Do(req *http.Request) *HTTPResult {
 	if err != nil {
 		Logger.Printf("请求失败: %s %s | 错误: %v | 耗时: %v",
 			req.Method, req.URL, err, duration)
-		return &HTTPResult{
-			nil, fmt.Errorf("请求失败: %w", err),
-		}
+		return nil, fmt.Errorf("请求失败: %w", err)
+
 	}
 
 	Logger.Printf("请求完成: %s %s | 状态: %d | 耗时: %v",
@@ -139,21 +138,21 @@ func (c *HTTPClient) Do(req *http.Request) *HTTPResult {
 	// 记录响应头 (过滤敏感信息)
 	c.logResponseHeaders(headers)
 
-	return &HTTPResult{resp, nil}
+	return resp, nil
 }
 
 // SendRequest 执行HTTP请求并返回响应
-func (c *HTTPClient) SendRequest(request *HTTPRequest) *HTTPResult {
+func (c *HTTPClient) SendRequest(request *HTTPRequest) (*http.Response, error) {
 	req, err := request.BuildRequest()
 	if err != nil {
 		Logger.Printf("构建请求失败: %v", err)
-		return &HTTPResult{nil, fmt.Errorf("构建请求失败: %w", err)}
+		return nil, fmt.Errorf("构建请求失败: %w", err)
 	}
 	return c.Do(req)
 }
 
 // Get 执行GET请求
-func (c *HTTPClient) Get(url string, headers map[string]string, queryParams map[string]string) *HTTPResult {
+func (c *HTTPClient) Get(url string, headers map[string]string, queryParams map[string]string) (*http.Response, error) {
 	req := NewHTTPRequest(http.MethodGet, url)
 	req.SetHeaders(headers)
 	req.SetQueryParams(queryParams)
@@ -161,14 +160,14 @@ func (c *HTTPClient) Get(url string, headers map[string]string, queryParams map[
 }
 
 // Post 执行POST请求
-func (c *HTTPClient) Post(url string, headers map[string]string) *HTTPResult {
+func (c *HTTPClient) Post(url string, headers map[string]string) (*http.Response, error) {
 	req := NewHTTPRequest(http.MethodPost, url)
 	req.SetHeaders(headers)
 	return c.SendRequest(req)
 }
 
 // PostJSON 执行POST JSON请求
-func (c *HTTPClient) PostJSON(url string, body interface{}, headers map[string]string) *HTTPResult {
+func (c *HTTPClient) PostJSON(url string, body interface{}, headers map[string]string) (*http.Response, error) {
 	req := NewHTTPRequest(http.MethodPost, url)
 	req.SetJSONBody(body)
 	req.SetHeaders(headers)
@@ -176,7 +175,7 @@ func (c *HTTPClient) PostJSON(url string, body interface{}, headers map[string]s
 }
 
 // PostForm 执行表单POST请求
-func (c *HTTPClient) PostForm(url string, formData map[string]string, headers map[string]string) *HTTPResult {
+func (c *HTTPClient) PostForm(url string, formData map[string]string, headers map[string]string) (*http.Response, error) {
 	req := NewHTTPRequest(http.MethodPost, url)
 	req.SetFormData(formData)
 	req.SetHeaders(headers)
@@ -184,7 +183,7 @@ func (c *HTTPClient) PostForm(url string, formData map[string]string, headers ma
 }
 
 // PostMultipart 执行multipart/form-data POST请求
-func (c *HTTPClient) PostMultipart(url string, formData map[string]string, files map[string]string, headers map[string]string) *HTTPResult {
+func (c *HTTPClient) PostMultipart(url string, formData map[string]string, files map[string]string, headers map[string]string) (*http.Response, error) {
 	req := NewHTTPRequest(http.MethodPost, url)
 	req.FormData = formData
 	for field, filePath := range files {
