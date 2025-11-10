@@ -11,6 +11,8 @@ type Coordinate struct {
 	Latitude         float64 `json:"latitude"`         //纬度
 	LongitudeRadians float64 `json:"longitudeRadians"` //弧度制经度
 	LatitudeRadians  float64 `json:"latitudeRadians"`  //弧度制纬度
+	Altitude         float64 `json:"altitude"`         //海拔
+	Height           float64 `json:"height"`           //相对高度
 }
 
 func NewCoordinate(longitude, latitude float64) *Coordinate {
