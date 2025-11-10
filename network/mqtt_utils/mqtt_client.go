@@ -4,11 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/Yui100901/MyGo/concurrency"
 	"log"
 	"os"
 	"sync"
 	"time"
+
+	"github.com/Yui100901/MyGo/concurrency"
 
 	mqtt "github.com/eclipse/paho.mqtt.golang"
 )
@@ -39,21 +40,21 @@ type MQTTClient struct {
 	reconnectMu sync.Mutex  // 重连操作锁
 }
 
-type MQTTPublishRequest struct {
-	Topic    string
-	Qos      byte
-	Retained bool
-	Payload  any
-}
-
-func NewMQTTPublishRequest(topic string, qos byte, retained bool, payload any) *MQTTPublishRequest {
-	return &MQTTPublishRequest{
-		Topic:    topic,
-		Qos:      qos,
-		Retained: retained,
-		Payload:  payload,
-	}
-}
+//type MQTTPublishRequest struct {
+//	Topic    string
+//	Qos      byte
+//	Retained bool
+//	Payload  any
+//}
+//
+//func NewMQTTPublishRequest(topic string, qos byte, retained bool, payload any) *MQTTPublishRequest {
+//	return &MQTTPublishRequest{
+//		Topic:    topic,
+//		Qos:      qos,
+//		Retained: retained,
+//		Payload:  payload,
+//	}
+//}
 
 func NewMQTTClient(config MQTTConfiguration) (*MQTTClient, error) {
 	ctx, cancel := context.WithCancel(context.Background())
@@ -61,7 +62,7 @@ func NewMQTTClient(config MQTTConfiguration) (*MQTTClient, error) {
 		subscriptions: concurrency.NewSafeMap[string, *Subscription](32),
 		ctx:           ctx,
 		cancel:        cancel,
-		logger:        log.New(os.Stdout, "[MQTT] ", log.LstdFlags),
+		logger:        log.New(os.Stdout, "[MQTT]["+config.ID+"] ", log.LstdFlags),
 	}
 
 	opts := mqtt.NewClientOptions()
@@ -246,12 +247,12 @@ func (c *MQTTClient) GetSubscription(topic string) (qos byte, callback mqtt.Mess
 }
 
 // Publish 发布消息（自动重连）
-func (c *MQTTClient) Publish(r *MQTTPublishRequest) error {
+func (c *MQTTClient) Publish(topic string, qos byte, retained bool, payload interface{}) error {
 	if err := c.ensureConnection(); err != nil {
 		return fmt.Errorf("connection not available: %w", err)
 	}
 
-	token := c.client.Publish(r.Topic, r.Qos, r.Retained, r.Payload)
+	token := c.client.Publish(topic, qos, retained, payload)
 	if !token.WaitTimeout(defaultConnectTimeout) {
 		return errors.New("publish timeout")
 	}
@@ -260,7 +261,7 @@ func (c *MQTTClient) Publish(r *MQTTPublishRequest) error {
 		return err
 	}
 
-	c.logger.Printf("Published to topic %s (QoS: %d)", r.Topic, r.Qos)
+	c.logger.Printf("Published to topic %s (QoS: %d)", topic, qos)
 	return nil
 }
 
