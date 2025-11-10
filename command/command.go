@@ -3,7 +3,8 @@ package command
 import (
 	"bufio"
 	"fmt"
-	"github.com/Yui100901/MyGo/log_utils"
+	"log"
+	"os"
 	"os/exec"
 	"runtime"
 	"strings"
@@ -14,8 +15,14 @@ import (
 // @Date 2024/12/17 16 30
 //
 
+var Logger *log.Logger
+
+func init() {
+	Logger = log.New(os.Stdout, "[CMD] ", log.LstdFlags)
+}
+
 func NewCommand(command string, args ...string) *exec.Cmd {
-	log_utils.Info.Println("创建命令:", command, strings.Join(args, " "))
+	Logger.Println("创建命令:", command, strings.Join(args, " "))
 
 	var cmd *exec.Cmd
 
@@ -52,7 +59,7 @@ func RunCommand(command string, args ...string) error {
 	go func() {
 		scanner := bufio.NewScanner(stdout)
 		for scanner.Scan() {
-			log_utils.Info.Println(scanner.Text())
+			Logger.Println("[STDOUT]", scanner.Text())
 		}
 	}()
 
@@ -60,7 +67,7 @@ func RunCommand(command string, args ...string) error {
 	go func() {
 		scanner := bufio.NewScanner(stderr)
 		for scanner.Scan() {
-			log_utils.Error.Println(scanner.Text())
+			Logger.Println("[STDERR]", scanner.Text())
 		}
 	}()
 
