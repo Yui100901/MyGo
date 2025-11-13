@@ -2,6 +2,7 @@ package mqtt_utils
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
@@ -244,6 +245,14 @@ func (c *MQTTClient) GetSubscription(topic string) (qos byte, callback mqtt.Mess
 		return sub.Qos, sub.Callback, true
 	}
 	return 0, nil, false
+}
+
+func (c *MQTTClient) PublishJson(topic string, qos byte, retained bool, payload interface{}) error {
+	jsonPayload, err := json.Marshal(payload)
+	if err != nil {
+		return err
+	}
+	return c.Publish(topic, qos, retained, jsonPayload)
 }
 
 // Publish 发布消息（自动重连）
