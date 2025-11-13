@@ -182,28 +182,26 @@ func (c *MQTTClient) Subscribe(topic string, qos byte, callback mqtt.MessageHand
 }
 
 // SubscribeMultiple 批量订阅主题
-func (c *MQTTClient) SubscribeMultiple(subscriptions map[string]byte, callback mqtt.MessageHandler) {
+func (c *MQTTClient) SubscribeMultiple(subscriptions ...Subscription) {
 	if len(subscriptions) == 0 {
 		return
 	}
 
 	// 更新订阅表
-	for topic, qos := range subscriptions {
-		c.subscriptions.Set(topic, &Subscription{
-			Topic:    topic,
-			Qos:      qos,
-			Callback: callback,
-		})
+	for _, sub := range subscriptions {
+		c.subscriptions.Set(sub.Topic, &sub)
 	}
 
 	if c.IsConnected() {
 		// 准备批量订阅
+		topics := make(map[string]byte, len(subscriptions))
 		handlers := make(map[string]mqtt.MessageHandler, len(subscriptions))
-		for topic := range subscriptions {
-			handlers[topic] = callback
+		for _, sub := range subscriptions {
+			topics[sub.Topic] = sub.Qos
+			handlers[sub.Topic] = sub.Callback
 		}
 
-		if token := c.client.SubscribeMultiple(subscriptions, func(client mqtt.Client, msg mqtt.Message) {
+		if token := c.client.SubscribeMultiple(topics, func(client mqtt.Client, msg mqtt.Message) {
 			if handler, ok := handlers[msg.Topic()]; ok {
 				handler(client, msg)
 			}
